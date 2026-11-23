@@ -29,3 +29,4 @@ keystore.properties
 .idea/
 svn-ignore.txt
 .svn/
+.agent/

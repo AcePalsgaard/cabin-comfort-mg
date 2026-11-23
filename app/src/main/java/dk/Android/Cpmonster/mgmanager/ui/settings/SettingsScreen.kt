@@ -36,6 +36,33 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dk.Android.Cpmonster.mgmanager.data.model.ThemeMode
+import dk.Android.Cpmonster.mgmanager.data.model.CarColor
+import dk.Android.Cpmonster.mgmanager.data.db.VehicleState
+import dk.Android.Cpmonster.mgmanager.ui.car.BodyStyle
+import dk.Android.Cpmonster.mgmanager.ui.car.CarSilhouette
+import dk.Android.Cpmonster.mgmanager.ui.car.carColor
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.layout.ContentScale
+import dk.Android.Cpmonster.mgmanager.ui.car.rememberCarPhoto
 import dk.Android.Cpmonster.mgmanager.saic.SaicRegion
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,6 +79,12 @@ fun SettingsScreen(
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
     isDemo: Boolean = false,
+    vehicle: VehicleState? = null,
+    carColorOverride: CarColor? = null,
+    onCarColorSelected: (CarColor?) -> Unit = {},
+    carPhoto: Long? = null,
+    onPhotoPicked: (Uri) -> Unit = {},
+    onPhotoRemoved: () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -69,6 +102,97 @@ fun SettingsScreen(
                         onClick = { onThemeModeSelected(mode) },
                         shape = SegmentedButtonDefaults.itemShape(i, modes.size),
                     ) { Text(label) }
+                }
+            }
+        }
+
+        Section("Your car") {
+            val detected = CarColor.detect(vehicle?.colorName)
+            val photo = rememberCarPhoto(carPhoto)
+            val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+                uri?.let(onPhotoPicked)
+            }
+            if (photo != null) {
+                Image(
+                    photo,
+                    contentDescription = "Your car",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(16.dp)),
+                )
+            } else {
+                CarSilhouette(
+                    style = BodyStyle.of(vehicle),
+                    color = carColor(carColorOverride, vehicle),
+                    modifier = Modifier.fillMaxWidth(0.8f).align(Alignment.CenterHorizontally),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = {
+                    picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }) {
+                    Icon(Icons.Rounded.AddPhotoAlternate, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (carPhoto == null) "Use my own photo" else "Change photo")
+                }
+                if (carPhoto != null) {
+                    TextButton(onClick = onPhotoRemoved) {
+                        Icon(Icons.Rounded.Delete, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Remove")
+                    }
+                }
+            }
+            Text(
+                if (carPhoto != null) "Colour (used when there's no photo)" else "Colour",
+                style = MaterialTheme.typography.labelLarge,
+            )
+            Text(
+                when {
+                    carColorOverride != null -> "Chosen by you: ${carColorOverride.label}"
+                    detected != null -> "Detected from your car: ${vehicle?.colorName}"
+                    !vehicle?.colorName.isNullOrBlank() -> "Your car says \"${vehicle?.colorName}\" – pick the closest colour"
+                    else -> "Colour not detected yet – pick one"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // "Auto" = use the detected colour
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+                        .border(
+                            if (carColorOverride == null) 3.dp else 1.dp,
+                            if (carColorOverride == null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                            CircleShape,
+                        )
+                        .selectable(selected = carColorOverride == null, onClick = { onCarColorSelected(null) }, role = Role.RadioButton),
+                    contentAlignment = Alignment.Center,
+                ) { Text("Auto", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold) }
+                CarColor.entries.forEach { c ->
+                    val selected = c == carColorOverride
+                    val swatch = Color(c.argb)
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(swatch)
+                            .border(
+                                if (selected) 3.dp else 1.dp,
+                                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                CircleShape,
+                            )
+                            .selectable(selected = selected, onClick = { onCarColorSelected(c) }, role = Role.RadioButton),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (selected) Icon(Icons.Rounded.Check, c.label, tint = if (swatch.luminance() > 0.5f) Color.Black else Color.White)
+                    }
                 }
             }
         }
@@ -132,7 +256,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun Section(title: String, content: @Composable () -> Unit) {
+private fun Section(title: String, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),

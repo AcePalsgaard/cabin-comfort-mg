@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.devtools.ksp)
     alias(libs.plugins.jetbrains.kotlin.plugin.serialization)
+    alias(libs.plugins.play.publisher)
 }
 
 // Upload key for Play (see keystore/README.txt). Not in SVN; release builds are unsigned if it's missing.
@@ -25,8 +26,8 @@ android {
         applicationId = "dk.rhea.cabincomfort"
         minSdk = 30
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -65,6 +66,31 @@ android {
         compose = true
         buildConfig = true // DevOnly.ENABLED uses BuildConfig.DEBUG
     }
+    // releaseTest is signed with the debug key – never upload it to Play.
+    playConfigs {
+        register("releaseTest") {
+            enabled.set(false)
+        }
+    }
+}
+
+// Gradle Play Publisher (bootstrapListing, publishListing, publishBundle, ...).
+// Service account key is kept outside the project. Override with PLAY_CREDENTIALS
+// or playCredentials=... in local.properties.
+val playCredentials: String = System.getenv("PLAY_CREDENTIALS")
+    ?: Properties().apply {
+        val f = rootProject.file("local.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }.getProperty("playCredentials")
+    ?: "${System.getProperty("user.home")}/.keys/gen-lang-client-0418284192-29ae594645cb.json"
+
+play {
+    serviceAccountCredentials.set(file(playCredentials))
+    defaultToAppBundles.set(true)
+    // publishBundle -> internal testing; promoteReleaseArtifact -> copies that release to closed testing (alpha).
+    track.set("internal")
+    fromTrack.set("internal")
+    promoteTrack.set("alpha")
 }
 
 dependencies {

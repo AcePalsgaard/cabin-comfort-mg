@@ -106,7 +106,7 @@ fun AboutScreen(
                     Text("Standing on the shoulders of giants", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 }
                 Text(
-                    "MG Manager would not exist without the SAIC-iSmart-API project. " +
+                    "Cabin Comfort for MG would not exist without the SAIC-iSmart-API project. " +
                         "Its contributors reverse-engineered the MG iSmart API and shared it as open source " +
                         "in saic-python-client-ng, which this app's car communication is based on.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -172,7 +172,7 @@ fun AboutScreen(
         }
 
         Text(
-            "MG Manager is an independent project and is not affiliated with, endorsed by or " +
+            "Cabin Comfort for MG is an independent project and is not affiliated with, endorsed by or " +
                 "connected to MG Motor or SAIC Motor. MG and iSmart are trademarks of their respective owners.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,

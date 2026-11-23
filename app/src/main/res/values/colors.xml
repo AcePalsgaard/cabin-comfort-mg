@@ -7,4 +7,11 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Home screen widgets -->
+    <color name="widget_heat">#FFE8590C</color>
+    <color name="widget_cool">#FF2F6FEB</color>
+    <color name="widget_surface">#FFEEF1F5</color>
+    <color name="widget_button_off">#FFFFFFFF</color>
+    <color name="widget_text">#FF1B1F24</color>
+    <color name="widget_text_dim">#FF5B6470</color>
 </resources>

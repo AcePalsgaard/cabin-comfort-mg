@@ -47,6 +47,8 @@ data class VehicleState(
     val model: String? = null,
     val modelYear: String? = null,
     val series: String? = null,
+    /** Paint name from the API, e.g. "Holborn Blue". Empty = the car didn't say. */
+    val colorName: String? = null,
     /** SeatHeating name; null = not detected yet. */
     val seatHeating: String? = null,
     val exteriorTemp: Int? = null,

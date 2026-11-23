@@ -6,9 +6,11 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dk.Android.Cpmonster.mgmanager.data.model.AuthSession
+import dk.Android.Cpmonster.mgmanager.data.model.CarColor
 import dk.Android.Cpmonster.mgmanager.data.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -36,6 +38,26 @@ class SettingsRepositoryImpl(
         val AUTH_TOKEN = stringPreferencesKey("auth_token")
         val USERNAME = stringPreferencesKey("username")
         val USER_ID = stringPreferencesKey("user_id")
+        val CAR_COLOR = stringPreferencesKey("car_color")
+        val CAR_PHOTO = longPreferencesKey("car_photo_at")
+    }
+
+    /** When the user's own car photo was saved; null = no photo (use the drawing). */
+    val carPhoto: Flow<Long?> = dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[PreferencesKeys.CAR_PHOTO] }
+
+    suspend fun setCarPhoto(savedAt: Long?) {
+        dataStore.edit { if (savedAt == null) it.remove(PreferencesKeys.CAR_PHOTO) else it[PreferencesKeys.CAR_PHOTO] = savedAt }
+    }
+
+    /** Colour picked in Settings; null = use the colour the car reports. */
+    val carColor: Flow<CarColor?> = dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { CarColor.fromName(it[PreferencesKeys.CAR_COLOR]) }
+
+    suspend fun setCarColor(color: CarColor?) {
+        dataStore.edit { if (color == null) it.remove(PreferencesKeys.CAR_COLOR) else it[PreferencesKeys.CAR_COLOR] = color.name }
     }
 
     override val themeMode: Flow<ThemeMode> = dataStore.data

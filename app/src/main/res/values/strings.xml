@@ -1,4 +1,8 @@
 <resources>
     <string name="app_name">Cabin Comfort for MG</string>
     <string name="launcher_name">MG Cabin</string>
+    <string name="widget_auto_label">Auto climate</string>
+    <string name="widget_auto_description">One tap starts the profile that fits the outside temperature</string>
+    <string name="widget_profiles_label">Climate profiles</string>
+    <string name="widget_profiles_description">Start or stop your warm-up and chill profiles</string>
 </resources>

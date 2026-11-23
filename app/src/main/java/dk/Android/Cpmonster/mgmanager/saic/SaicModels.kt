@@ -36,6 +36,7 @@ data class VehicleInfo(
     val modelName: String?,
     val modelYear: String?,
     val series: String?,
+    val colorName: String? = null,
     val isCurrent: Boolean,
     /** Raw `HeatedSeat` value from vehicleModelConfiguration, if the car reported one. */
     val heatedSeat: String? = null,

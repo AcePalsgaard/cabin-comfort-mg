@@ -80,6 +80,7 @@ class SaicApi(
                 modelName = o.str("modelName") ?: o.str("name"),
                 modelYear = o.str("modelYear"),
                 series = o.str("series"),
+                colorName = o.str("colorName"),
                 isCurrent = o.optBoolean("isCurrentVehicle", false),
                 heatedSeat = o.configValue("HeatedSeat"),
             )

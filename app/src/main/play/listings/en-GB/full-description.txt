@@ -1,0 +1,36 @@
+No more digging through menus every frosty morning.
+
+Cabin Comfort for MG lets you save your perfect cabin as a profile – and start everything with a single tap: cabin heat, defrost, heated seats, steering wheel and rear window, all at once.
+
+★ ENVIRONMENT PROFILES
+• "Warm up" for cold mornings: cabin heat, windscreen defrost, seat heating, heated steering wheel and rear window – in one tap
+• "Chill" for hot days: cool the cabin before you get in
+• Edit each profile once and forget about it: temperature, fan speed, defrost, seat levels for driver and passenger, steering wheel, rear window
+• Switch profiles straight from the home screen
+
+★ RUNS LONGER THAN ONE CYCLE
+Your MG stops the climate on its own after about 10 minutes. Cabin Comfort for MG can keep it going for up to 4 runs in a row (around 40 minutes) and restarts each run automatically. A minute before the last run ends, you're asked whether to continue.
+
+★ ONE TAP, NO MENUS
+Instead of turning on climate, then seats, then the wheel, then the rear window one by one, you just tap your profile. Done.
+
+★ SMART SUGGESTIONS
+The app checks the outside temperature and suggests the profile that fits. Nothing starts until you say so.
+
+★ RELIABLE IN THE BACKGROUND
+MG's servers don't always answer the first time. Every command is queued and quietly retried, so you don't have to keep tapping. A notification shows progress while the car is being heated or cooled.
+
+★ CAR STATUS AT A GLANCE
+Outside and cabin temperature and battery level when you open the app.
+
+★ PRIVATE BY DESIGN
+• No ads, no analytics, no servers of our own
+• Your login is stored encrypted on your phone and only sent to MG's own iSMART servers
+
+REQUIREMENTS
+• An MG with remote climate control and an active MG iSMART account
+• Log in with the same email/phone and password as the official iSMART app
+• Supports the Europe, Australia/NZ, Türkiye and Brazil iSMART servers
+
+DISCLAIMER
+Cabin Comfort for MG is an independent, unofficial app. It is not affiliated with, endorsed by or sponsored by MG Motor, SAIC Motor or iSMART. MG and iSMART are trademarks of their respective owners. Built on the open-source SAIC-iSmart-API project.

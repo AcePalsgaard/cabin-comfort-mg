@@ -1,0 +1,5 @@
+Nyt i 1.1:
+• Widgets til startskærmen: en Auto-knap og en med dine to profiler. Begge viser, hvilken profil der kører
+• En tegning af din bil på forsiden i bilens farve
+• Brug dit eget billede af bilen (Settings › Your car)
+• Vælg selv bilens farve, hvis den ikke bliver fundet

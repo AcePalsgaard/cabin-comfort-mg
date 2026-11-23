@@ -28,7 +28,7 @@ class VehicleRepository(private val dao: VehicleDao) {
 
     suspend fun refresh(api: SaicApi): VehicleState {
         var st = dao.get() ?: VehicleState()
-        if (st.vin == null || st.model == null || st.seatHeating == null) {
+        if (st.vin == null || st.model == null || st.seatHeating == null || st.colorName == null) {
             st = loadVehicle(api, st)
             dao.upsert(st)
         }
@@ -82,6 +82,7 @@ class VehicleRepository(private val dao: VehicleDao) {
         return st.copy(
             vin = v.vin, model = v.modelName, modelYear = v.modelYear, series = v.series,
             seatHeating = SeatHeating.fromConfig(v.heatedSeat).name,
+            colorName = v.colorName ?: "",
         )
     }
 }

@@ -1,0 +1,36 @@
+Slut med at rode rundt i menuer hver frostklar morgen.
+
+Med Cabin Comfort for MG gemmer du din perfekte kabine som en profil – og starter det hele med ét tryk: kabinevarme, afrimning, sædevarme, rat- og bagrudevarme på én gang.
+
+★ KOMFORTPROFILER
+• "Warm up" til kolde morgener: kabinevarme, afrimning af forruden, sædevarme, rat- og bagrudevarme – med ét tryk
+• "Chill" til varme dage: køl kabinen ned, før du sætter dig ind
+• Indstil hver profil én gang: temperatur, blæser, afrimning, sædevarme til fører og passager, rat og bagrude
+• Skift profil direkte fra forsiden
+
+★ KØRER LÆNGERE END ÉN CYKLUS
+Din MG slukker selv klimaanlægget efter ca. 10 minutter. Cabin Comfort for MG kan holde det kørende i op til 4 omgange i træk (ca. 40 minutter) og genstarter automatisk. Et minut før sidste omgang slutter, bliver du spurgt, om den skal fortsætte.
+
+★ ÉT TRYK, INGEN MENUER
+I stedet for at tænde klima, så sæder, så rat og så bagrude hver for sig, trykker du bare på din profil. Færdig.
+
+★ SMARTE FORSLAG
+Appen ser på udetemperaturen og foreslår den profil, der passer. Intet starter, før du siger ja.
+
+★ PÅLIDELIG I BAGGRUNDEN
+MG's servere svarer ikke altid i første forsøg. Alle kommandoer sættes i kø og prøves igen automatisk, så du ikke skal blive ved med at trykke. En notifikation viser fremskridtet, mens bilen varmes op eller køles ned.
+
+★ BILENS STATUS MED ÉT BLIK
+Ude- og kabinetemperatur samt batteriniveau, når du åbner appen.
+
+★ PRIVATLIV FØRST
+• Ingen reklamer, ingen analyse, ingen egne servere
+• Dit login gemmes krypteret på telefonen og sendes kun til MG's egne iSMART-servere
+
+KRAV
+• En MG med fjernstyret klima og en aktiv MG iSMART-konto
+• Log ind med samme e-mail/telefon og adgangskode som i den officielle iSMART-app
+• Understøtter iSMART-serverne for Europa, Australien/NZ, Tyrkiet og Brasilien
+
+ANSVARSFRASKRIVELSE
+Cabin Comfort for MG er en uafhængig, uofficiel app og er ikke tilknyttet, godkendt eller sponsoreret af MG Motor, SAIC Motor eller iSMART. MG og iSMART er varemærker tilhørende deres respektive ejere. Bygget på open source-projektet SAIC-iSmart-API.

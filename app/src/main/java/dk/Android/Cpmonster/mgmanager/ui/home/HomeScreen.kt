@@ -74,6 +74,20 @@ import dk.Android.Cpmonster.mgmanager.data.db.VehicleState
 import dk.Android.Cpmonster.mgmanager.data.profile.ActiveProfile
 import dk.Android.Cpmonster.mgmanager.data.profile.ProfileSuggester
 import dk.Android.Cpmonster.mgmanager.queue.JobType
+import dk.Android.Cpmonster.mgmanager.data.model.CarColor
+import dk.Android.Cpmonster.mgmanager.ui.car.BodyStyle
+import dk.Android.Cpmonster.mgmanager.ui.car.CarSilhouette
+import dk.Android.Cpmonster.mgmanager.ui.car.carColor
+import dk.Android.Cpmonster.mgmanager.ui.car.rememberCarPhoto
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.draw.drawWithContent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -95,21 +109,23 @@ data class HomeUi(
     val suggestion: Profile? = null,
     val syncing: Boolean = false,
     val notice: String? = null,
+    val carColorOverride: CarColor? = null,
+    val carPhoto: Long? = null,
 )
 
 class HomeViewModel(private val c: AppContainer) : ViewModel() {
     private val dismissedFor = MutableStateFlow<Long?>(null)
 
     val ui: StateFlow<HomeUi> = combine(
-        c.vehicle.state,
+        combine(c.vehicle.state, c.settings.carColor, c.settings.carPhoto) { v, o, p -> Triple(v, o, p) },
         c.profiles.profiles,
         c.profiles.active,
         combine(c.queue.pendingCount, c.queue.lastDropped) { n, d -> n to d },
         dismissedFor,
-    ) { vehicle, profiles, active, (pending, dropped), dismissed ->
+    ) { (vehicle, colorOverride, photo), profiles, active, (pending, dropped), dismissed ->
         val suggestion = ProfileSuggester.suggest(vehicle?.exteriorTemp, profiles, active?.id)
             ?.takeIf { it.id != dismissed }
-        HomeUi(vehicle, profiles, active?.id, active, suggestion, pending > 0, dropped)
+        HomeUi(vehicle, profiles, active?.id, active, suggestion, pending > 0, dropped, colorOverride, photo)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUi())
 
     init {
@@ -161,7 +177,7 @@ fun HomeScreen(
     ) {
         if (isDemo) DemoBanner(onExitDemo)
 
-        HeroCard(ui.vehicle, ui.syncing, ui.notice, activeProfile, accent, onRefresh = { viewModel.refresh() })
+        HeroCard(ui.vehicle, ui.syncing, ui.notice, activeProfile, accent, carColor(ui.carColorOverride, ui.vehicle), rememberCarPhoto(ui.carPhoto), onRefresh = { viewModel.refresh() })
 
         AnimatedVisibility(visible = ui.suggestion != null) {
             ui.suggestion?.let { s ->
@@ -226,6 +242,8 @@ private fun HeroCard(
     notice: String?,
     activeProfile: Profile?,
     accent: Color,
+    paint: CarColor,
+    photo: ImageBitmap?,
     onRefresh: () -> Unit,
 ) {
     val tint by animateColorAsState(accent, label = "hero")
@@ -237,6 +255,32 @@ private fun HeroCard(
             .background(Brush.linearGradient(listOf(tint.copy(alpha = 0.45f), tint.copy(alpha = 0.12f), base)))
             .padding(20.dp),
     ) {
+        // Faded picture of the car (own photo, else our drawing), fading out towards the text on the left.
+        val fade = Modifier
+            .graphicsLayer { alpha = if (photo != null) 0.5f else 0.6f; compositingStrategy = CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                drawRect(
+                    Brush.horizontalGradient(0f to Color.Transparent, 0.5f to Color.Black),
+                    blendMode = BlendMode.DstIn,
+                )
+            }
+        Box(Modifier.matchParentSize(), contentAlignment = Alignment.CenterEnd) {
+            if (photo != null) {
+                Image(
+                    photo,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxHeight().fillMaxWidth(0.8f).offset(x = 20.dp).then(fade),
+                )
+            } else {
+                CarSilhouette(
+                    style = BodyStyle.of(v),
+                    color = paint,
+                    modifier = Modifier.fillMaxWidth(0.72f).offset(x = 44.dp, y = 4.dp).then(fade),
+                )
+            }
+        }
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(

@@ -63,6 +63,11 @@ class AppContainer(private val context: Context) {
             queue.kick()
         }
         StatusPollWorker.schedule(context)
+        // Home screen widgets follow the active profile, profile names and outside temp.
+        scope.launch {
+            dk.Android.Cpmonster.mgmanager.widget.Widgets.snapshots(this@AppContainer)
+                .collect { dk.Android.Cpmonster.mgmanager.widget.Widgets.render(context, it) }
+        }
     }
 
     suspend fun onLoggedIn() {

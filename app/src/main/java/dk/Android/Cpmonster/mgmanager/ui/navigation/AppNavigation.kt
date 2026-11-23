@@ -99,6 +99,9 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
     BackHandler(enabled = canNavigateBack) { navigateBack() }
 
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val vehicleState by container.vehicle.state.collectAsStateWithLifecycle(null)
+    val carColorOverride by container.settings.carColor.collectAsStateWithLifecycle(null)
+    val carPhoto by container.settings.carPhoto.collectAsStateWithLifecycle(null)
     val showTestServer = dk.Android.Cpmonster.mgmanager.DevOnly.ENABLED // DEV-ONLY
     val appVersion = remember {
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""
@@ -195,6 +198,25 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
                     }
                 },
                         isDemo = auth.isDemo,
+                        vehicle = vehicleState,
+                        carColorOverride = carColorOverride,
+                        onCarColorSelected = { c -> scope.launch { container.settings.setCarColor(c) } },
+                        carPhoto = carPhoto,
+                        onPhotoPicked = { uri ->
+                            scope.launch {
+                                if (dk.Android.Cpmonster.mgmanager.ui.car.CarPhoto.save(context, uri)) {
+                                    container.settings.setCarPhoto(System.currentTimeMillis())
+                                } else {
+                                    android.widget.Toast.makeText(context, "Couldn't read that picture", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        onPhotoRemoved = {
+                            scope.launch {
+                                container.settings.setCarPhoto(null)
+                                dk.Android.Cpmonster.mgmanager.ui.car.CarPhoto.delete(context)
+                            }
+                        },
                     )
 
                     Screen.About -> AboutScreen(appVersion = appVersion)

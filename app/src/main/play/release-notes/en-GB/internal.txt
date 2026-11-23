@@ -1,0 +1,5 @@
+What's new in 1.1:
+• Home screen widgets: an Auto button, and one with your two profiles. Both show which profile is running
+• A drawing of your car on the front page, in your car's colour
+• Use your own photo of your car (Settings › Your car)
+• Pick the car colour yourself if it isn't detected

@@ -53,6 +53,7 @@ class DemoCar(private val vehicle: VehicleRepository) {
         model = "MG4 Electric (demo)",
         modelYear = "2024",
         series = "EH32 S",
+        colorName = "Holborn Blue",
         seatHeating = SeatHeating.LEVELS.name,
         exteriorTemp = OUTSIDE,
         interiorTemp = OUTSIDE + 2,

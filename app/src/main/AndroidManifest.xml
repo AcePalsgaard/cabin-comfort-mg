@@ -39,6 +39,30 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".widget.AutoWidget"
+            android:exported="false"
+            android:label="@string/widget_auto_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_auto_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.ProfilesWidget"
+            android:exported="false"
+            android:label="@string/widget_profiles_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_profiles_info" />
+        </receiver>
     </application>
 
 </manifest>

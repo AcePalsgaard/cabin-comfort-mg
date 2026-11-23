@@ -1,0 +1,4 @@
+<resources>
+    <!-- The UI is all Compose; this only styles the window before Compose draws. -->
+    <style name="Theme.MGManager" parent="android:Theme.Material.NoActionBar" />
+</resources>

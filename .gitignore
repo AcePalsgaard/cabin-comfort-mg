@@ -1,0 +1,31 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Signing material - never publish
+keystore/
+*.keystore
+*.jks
+*.p12
+keystore.properties
+# Build outputs / local tooling
+.kotlin
+*.aab
+*.apk
+/app/release
+/app/build
+.idea/
+svn-ignore.txt
+.svn/

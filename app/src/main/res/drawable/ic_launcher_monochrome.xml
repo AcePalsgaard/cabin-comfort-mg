@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed-icon (Android 13+) version of the launcher icon -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:translateX="22" android:translateY="24" android:scaleX="0.125" android:scaleY="0.125">
+        <path android:fillColor="#FFFFFF" android:pathData="M104,130 a36,36 0 1,0 72,0 a36,36 0 1,0 -72,0"/>
+        <path android:strokeColor="#FFFFFF" android:strokeWidth="12" android:strokeLineCap="round" android:pathData="M140,68 L140,80 M140,180 L140,192 M78,130 L90,130 M190,130 L202,130 M96,86 L104,94 M176,166 L184,174 M96,174 L104,166 M176,94 L184,86 M372,78 L372,182 M327,104 L417,156 M327,156 L417,104"/>
+        <path android:fillColor="#FFFFFF" android:fillType="evenOdd" android:pathData="M92,340 L112,286 Q124,258 158,254 L206,250 L250,208 Q262,196 284,196 L344,196 Q368,196 384,214 L418,254 Q440,258 438,286 L432,340 Z M226,252 L262,218 L300,218 L300,252 Z M316,218 L346,218 Q358,218 366,228 L384,252 L316,252 Z"/>
+        <path android:fillColor="#FFFFFF" android:pathData="M134,344 a38,38 0 1,0 76,0 a38,38 0 1,0 -76,0 M322,344 a38,38 0 1,0 76,0 a38,38 0 1,0 -76,0"/>
+    </group>
+</vector>

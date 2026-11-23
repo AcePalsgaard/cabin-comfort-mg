@@ -1,0 +1,357 @@
+#!/usr/bin/env python3
+"""
+Fake MG iSMART (SAIC) API server for testing MG Manager without a real car.
+
+    python mock_saic_server.py                 # port 8080, 15% random failures
+    python mock_saic_server.py --fail-rate 0   # no failures
+    python mock_saic_server.py --outside 2     # cold day -> app suggests "Cold"
+
+Login: any email/phone, password "test".
+From the Android emulator the PC is http://10.0.2.2:8080 (pick region "Test server").
+
+Uses only the standard library. If pycryptodome is installed
+(pip install pycryptodome) requests are decrypted and responses encrypted
+exactly like the real server; otherwise responses are sent as plain JSON.
+"""
+from __future__ import annotations
+
+import argparse
+import base64
+import hashlib
+import hmac
+import json
+import random
+import threading
+import time
+import uuid
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlsplit
+
+try:
+    from Crypto.Cipher import AES
+    from Crypto.Util.Padding import pad, unpad
+    HAVE_AES = True
+except ImportError:
+    HAVE_AES = False
+
+PREFIX = "/api.app/v1"
+TENANT = "459771"
+PASSWORD = "test"
+VIN = "LSJWH4092PN000001"
+
+RVC_NAMES = {"5": "heated seats", "6": "climate", "8": "steering wheel", "32": "rear window"}
+
+
+def md5(s: str) -> str:
+    return hashlib.md5(s.encode()).hexdigest()
+
+
+def aes_enc(plain: str, key: str, iv: str) -> str:
+    c = AES.new(bytes.fromhex(key), AES.MODE_CBC, bytes.fromhex(iv))
+    return c.encrypt(pad(plain.encode(), 16)).hex()
+
+
+def aes_dec(hex_text: str, key: str, iv: str) -> str:
+    c = AES.new(bytes.fromhex(key), AES.MODE_CBC, bytes.fromhex(iv))
+    return unpad(c.decrypt(bytes.fromhex(hex_text)), 16).decode()
+
+
+class Car:
+    def __init__(self, outside: int) -> None:
+        self.lock = threading.Lock()
+        self.outside = outside
+        self.inside = outside + 2
+        self.soc = 763  # 76.3 %
+        self.climate_on = False
+        self.target_idx = 8
+        self.seats = [0, 0]
+        self.wheel = False
+        self.rear_window = False
+        self.last_tick = time.time()
+
+    def tick(self) -> None:
+        """Cabin temperature drifts toward target while climate runs."""
+        now = time.time()
+        steps = int((now - self.last_tick) // 20)
+        if steps <= 0:
+            return
+        self.last_tick += steps * 20
+        target = 16 + (self.target_idx - 2) if self.climate_on else self.outside
+        for _ in range(steps):
+            if self.inside < target:
+                self.inside += 1
+            elif self.inside > target:
+                self.inside -= 1
+            if self.climate_on:
+                self.soc = max(0, self.soc - 1)
+
+    def basic_status(self) -> dict:
+        self.tick()
+        return {
+            "exteriorTemperature": self.outside,
+            "interiorTemperature": self.inside,
+            "remoteClimateStatus": 2 if self.climate_on else 0,
+            "frontLeftSeatHeatLevel": self.seats[0],
+            "frontRightSeatHeatLevel": self.seats[1],
+            "steeringHeatLevel": 1 if self.wheel else 0,
+            "rmtHtdRrWndSt": 1 if self.rear_window else 0,
+            "lockStatus": 1,
+            "engineStatus": 0,
+            "handBrake": 1,
+            "mileage": 123450,
+            "batteryVoltage": 142,
+        }
+
+    def apply(self, req_type: str, params: dict[int, int]) -> None:
+        self.tick()
+        if req_type == "6":
+            fan = params.get(19, 0)
+            self.climate_on = fan > 0
+            if 20 in params and fan > 0:
+                self.target_idx = params[20]
+        elif req_type == "5":
+            self.seats = [params.get(17, self.seats[0]), params.get(18, self.seats[1])]
+        elif req_type == "8":
+            self.wheel = params.get(24, 0) == 1
+        elif req_type == "32":
+            self.rear_window = params.get(23, 0) == 1
+
+
+class State:
+    def __init__(self, args) -> None:
+        self.car = Car(args.outside)
+        self.fail_rate = args.fail_rate
+        self.slow = args.slow
+        self.tokens: dict[str, float] = {}
+        self.events: dict[str, int] = {}  # event id -> calls left before data is ready
+
+
+def make_handler(state: State):
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def log_message(self, fmt, *args):  # quieter default log
+            pass
+
+        def do_GET(self):
+            self.handle_call("GET")
+
+        def do_POST(self):
+            self.handle_call("POST")
+
+        # ---------- plumbing ----------
+
+        def handle_call(self, method: str) -> None:
+            url = urlsplit(self.path)
+            if not url.path.startswith(PREFIX + "/"):
+                return self.send_json(404, {"code": 404, "message": "Not found"})
+            sub = url.path[len(PREFIX):]  # e.g. /vehicle/list
+            sign_path = sub + (("?" + url.query) if url.query else "")
+            query = {k: v[0] for k, v in parse_qs(url.query).items()}
+
+            length = int(self.headers.get("Content-Length") or 0)
+            raw = self.rfile.read(length).decode() if length else ""
+            token = self.headers.get("blade-auth", "")
+            body = self.decrypt_body(raw, sign_path, token)
+            self.check_signature(sign_path, token, raw)
+
+            if state.slow:
+                time.sleep(state.slow)
+
+            # Random flakiness, like the real thing.
+            if sub != "/oauth/token" and random.random() < state.fail_rate:
+                kind = random.choice(["http500", "code", "timeout"])
+                log(f"{method} {sub} -> simulated failure ({kind})")
+                if kind == "http500":
+                    return self.send_json(500, {"code": 500, "message": "Internal error"}, plain=True)
+                if kind == "timeout":
+                    time.sleep(25)
+                return self.send_json(200, {"code": 4, "message": "Vehicle busy, try again"})
+
+            if sub != "/oauth/token":
+                exp = state.tokens.get(token)
+                if exp is None or exp < time.time():
+                    log(f"{method} {sub} -> 401 (bad or expired token)")
+                    return self.send_json(200, {"code": 401, "message": "Token expired"})
+
+            routes = {
+                ("POST", "/oauth/token"): self.login,
+                ("GET", "/vehicle/list"): self.vehicle_list,
+                ("GET", "/vehicle/status/cache"): self.status_cache,
+                ("GET", "/vehicle/status"): self.status_live,
+                ("GET", "/vehicle/charging/mgmtData"): self.mgmt_data,
+                ("POST", "/vehicle/control"): self.control,
+                ("GET", "/user/timezone"): lambda q, b: self.ok({"timezone": "GMT+01:00"}),
+            }
+            fn = routes.get((method, sub))
+            if fn is None:
+                log(f"{method} {sub} -> 404")
+                return self.send_json(200, {"code": 404, "message": f"Unknown endpoint {sub}"})
+            fn(query, body)
+
+        def decrypt_body(self, raw: str, path: str, token: str) -> str:
+            raw = raw.strip()
+            ts = self.headers.get("APP-SEND-DATE", "")
+            ct = self.headers.get("ORIGINAL-CONTENT-TYPE", "application/json")
+            if not raw or not HAVE_AES or not ts:
+                return raw
+            key = md5(md5(path + TENANT + token + "app") + ts + "1" + ct)
+            try:
+                return aes_dec(raw, key, md5(ts))
+            except Exception as e:
+                log(f"  !! could not decrypt request body: {e}")
+                return raw
+
+        def check_signature(self, path: str, token: str, enc_body: str) -> None:
+            ts = self.headers.get("APP-SEND-DATE", "")
+            ct = self.headers.get("ORIGINAL-CONTENT-TYPE", "application/json")
+            got = self.headers.get("APP-VERIFICATION-STRING", "")
+            key = md5(md5(path + TENANT + token + "app") + ts + "1" + ct)
+            msg = path + TENANT + token + "app" + ts + "1" + ct + enc_body.strip()
+            want = hmac.new(md5(key + ts).encode(), msg.encode(), hashlib.sha256).hexdigest()
+            if got != want:
+                log(f"  !! APP-VERIFICATION-STRING mismatch on {path}")
+
+        def ok(self, data, extra_headers=None):
+            self.send_json(200, {"code": 0, "message": "success", "data": data}, extra_headers=extra_headers)
+
+        def send_json(self, status: int, payload: dict, extra_headers=None, plain=False):
+            text = json.dumps(payload)
+            headers = dict(extra_headers or {})
+            ct = "application/json"
+            if HAVE_AES and not plain:
+                ts = str(int(time.time() * 1000))
+                text = aes_enc(text, md5(ts + "1" + ct), md5(ts))
+                headers.update({"APP-SEND-DATE": ts, "ORIGINAL-CONTENT-TYPE": ct, "APP-CONTENT-ENCRYPTED": "1"})
+            data = text.encode()
+            self.send_response(status)
+            self.send_header("Content-Type", f"{ct};charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            for k, v in headers.items():
+                self.send_header(k, v)
+            self.end_headers()
+            self.wfile.write(data)
+
+        def event_gate(self, name: str) -> bool:
+            """Mimic the event-id dance: first call returns only an event-id, data comes later."""
+            eid = self.headers.get("event-id", "0")
+            if eid == "0" or eid not in state.events:
+                new = uuid.uuid4().hex[:16]
+                state.events[new] = random.randint(0, 2)
+                log(f"  {name}: waking car, event-id {new}")
+                self.send_json(200, {"code": 0, "message": "processing"}, extra_headers={"event-id": new})
+                return False
+            if state.events[eid] > 0:
+                state.events[eid] -= 1
+                self.send_json(200, {"code": 0, "message": "processing"}, extra_headers={"event-id": eid})
+                return False
+            del state.events[eid]
+            return True
+
+        # ---------- endpoints ----------
+
+        def login(self, q, body: str):
+            form = {k: v[0] for k, v in parse_qs(body).items()}
+            user = form.get("username", "?")
+            if not HAVE_AES:
+                # Can't read the encrypted form without pycryptodome: accept anyone.
+                ok = True
+            else:
+                ok = form.get("password") == hashlib.sha1(PASSWORD.encode()).hexdigest()
+            if not ok:
+                log(f"LOGIN {user} -> wrong password")
+                return self.send_json(200, {"code": 1, "message": "Incorrect username or password"})
+            token = "mock-" + uuid.uuid4().hex
+            state.tokens[token] = time.time() + 3600
+            log(f"LOGIN {user} -> ok")
+            self.ok({
+                "access_token": token, "expires_in": 3600, "token_type": "bearer",
+                "user_name": user, "account": user, "languageType": "EN",
+            })
+
+        def vehicle_list(self, q, body):
+            log("GET vehicle list")
+            self.ok({"vinList": [{
+                "vin": VIN, "brandName": "MG", "modelName": "MG4 Electric", "modelYear": "2023",
+                "series": "EH32 S", "name": "MG4", "colorName": "Holborn Blue",
+                "isCurrentVehicle": True, "isActivate": True, "isSubaccount": False,
+                "subAccountList": [], "vehicleModelConfiguration": [
+                    {"itemCode": "HeatedSeat", "itemName": "Heated seat", "itemValue": "1"},
+                ],
+            }]})
+
+        def status_cache(self, q, body):
+            with state.car.lock:
+                s = state.car.basic_status()
+            log(f"GET status (cached): outside {s['exteriorTemperature']}°, inside {s['interiorTemperature']}°")
+            self.ok({"basicVehicleStatus": s, "statusTime": int(time.time()), "onlineStatus": 1})
+
+        def status_live(self, q, body):
+            if not self.event_gate("status"):
+                return
+            with state.car.lock:
+                s = state.car.basic_status()
+            log(f"GET status (live): outside {s['exteriorTemperature']}°, inside {s['interiorTemperature']}°")
+            self.ok({"basicVehicleStatus": s, "statusTime": int(time.time())})
+
+        def mgmt_data(self, q, body):
+            if not self.event_gate("battery"):
+                return
+            with state.car.lock:
+                state.car.tick()
+                soc = state.car.soc
+            log(f"GET battery: {soc / 10:.1f}%")
+            self.ok({"chrgMgmtData": {"bmsPackSOCDsp": soc, "bmsChrgSts": 0}})
+
+        def control(self, q, body: str):
+            if not self.event_gate("control"):
+                return
+            try:
+                req = json.loads(body)
+            except Exception:
+                log("POST control (body not readable without pycryptodome)")
+                return self.ok({"rvcReqSts": "AQ==", "failureType": 0})
+            rtype = str(req.get("rvcReqType"))
+            params = {}
+            for p in req.get("rvcParams") or []:
+                v = base64.b64decode(p.get("paramValue", ""))
+                params[int(p["paramId"])] = v[0] if v else 0
+            with state.car.lock:
+                state.car.apply(rtype, params)
+                s = state.car.basic_status()
+            shown = {k: v for k, v in params.items() if k != 255}
+            log(f"POST control: {RVC_NAMES.get(rtype, rtype)} {shown}")
+            self.ok({
+                "rvcReqType": base64.b64encode(bytes([int(rtype) % 256])).decode(),
+                "rvcReqSts": "AQ==", "failureType": 0, "basicVehicleStatus": s,
+            })
+
+    return Handler
+
+
+def log(msg: str) -> None:
+    print(time.strftime("%H:%M:%S"), msg, flush=True)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Fake MG iSMART API server")
+    ap.add_argument("--port", type=int, default=8080)
+    ap.add_argument("--fail-rate", type=float, default=0.15, help="share of calls that fail on purpose (0-1)")
+    ap.add_argument("--outside", type=int, default=4, help="outside temperature in °C")
+    ap.add_argument("--slow", type=float, default=0.5, help="extra delay per call in seconds")
+    args = ap.parse_args()
+
+    server = ThreadingHTTPServer(("0.0.0.0", args.port), make_handler(State(args)))
+    print(f"Fake MG server on http://localhost:{args.port}{PREFIX}/")
+    print(f"From the Android emulator: http://10.0.2.2:{args.port}  (region 'Test server')")
+    print(f"Password: '{PASSWORD}'   failure rate: {args.fail_rate:.0%}   outside: {args.outside}°")
+    print("Encryption:", "on (pycryptodome found)" if HAVE_AES else "off - plain JSON (pip install pycryptodome for full realism)")
+    print("Ctrl+C to stop.\n")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    main()

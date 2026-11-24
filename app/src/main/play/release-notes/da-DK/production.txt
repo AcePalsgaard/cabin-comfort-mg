@@ -1,6 +1,6 @@
-Nyt i 1.3:
-• Liggende visning ser ens ud, uanset hvilken vej du vender telefonen
-• Log ind uden internet siger nu det, i stedet for at lukke dig ind ukontrolleret
-• Et kort hik hos MG logger dig ikke længere ud; appen prøver stille igen
-• Ikonerne i statuslinjen følger appens lyse eller mørke tema
-• Mindre og hurtigere app
+Nyt i 1.4:
+• Kommandoer kommer mere sikkert frem til bilen, og appen sender ikke længere en strøm af nye forsøg
+• Hvis bilen afviser fjernbetjening, fortæller appen hvorfor, og hvad du skal gøre
+• Varmen vises som tændt, så snart bilen bekræfter den; sæder og andet ekstra følger efter i baggrunden
+• Tydeligere besked, når MG ikke godtager dit login
+• Færre logins hos MG i baggrunden

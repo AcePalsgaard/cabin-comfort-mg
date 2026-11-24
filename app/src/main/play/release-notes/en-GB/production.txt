@@ -1,6 +1,6 @@
-What's new in 1.3:
-• Landscape looks the same whichever way you turn the phone
-• Logging in without internet now says so, instead of letting you in unchecked
-• A brief hiccup at MG no longer logs you out; the app quietly tries again
-• Status bar icons follow the app's light or dark theme
-• Smaller, faster app
+What's new in 1.4:
+• Commands reach the car more reliably, and the app no longer floods it with retries
+• If the car refuses remote commands, the app says why and what to do
+• Heating shows as running as soon as the car confirms it; seats and other extras follow in the background
+• Clearer message when MG doesn't accept your login
+• Fewer logins to MG in the background

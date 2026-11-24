@@ -114,7 +114,8 @@ class AuthRepository(
         val result = try {
             retryNetwork(attempts = 2) { api.login(username.trim(), hash, isEmail, countryCode) }
         } catch (e: SaicNetworkException) {
-            if (!e.serverDown) throw e
+            // No internet on the phone says nothing about MG: don't let an unchecked password in.
+            if (!e.serverDown || e.phoneOffline) throw e
             null
         }
         lock.withLock {

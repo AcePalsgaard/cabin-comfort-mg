@@ -22,11 +22,15 @@ enum class SaicRegion(val label: String, val baseUri: String, val region: String
 
 /** Anything the server or network threw at us. Retryable by default – the API fails a lot. */
 open class SaicApiException(message: String, val code: Int = -1, cause: Throwable? = null) : Exception(message, cause)
-/** [serverDown] is false when the server answered but the car didn't (not the server's fault). */
+/**
+ * [serverDown] is false when the server answered but the car didn't (not the server's fault).
+ * [phoneOffline] is true when the request never left the phone (no internet), so it says nothing about MG.
+ */
 class SaicNetworkException(
     message: String,
     cause: Throwable? = null,
     val serverDown: Boolean = true,
+    val phoneOffline: Boolean = false,
 ) : SaicApiException(message, -1, cause)
 class SaicAuthException(message: String) : SaicApiException(message, 401)
 class SaicLoginRejectedException(message: String) : SaicApiException(message)

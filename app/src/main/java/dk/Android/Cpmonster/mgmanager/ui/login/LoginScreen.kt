@@ -141,7 +141,8 @@ class LoginViewModel(private val c: AppContainer) : ViewModel() {
                 e.message ?: "Wrong username or password"
             } catch (e: SaicNetworkException) {
                 Log.w(TAG, "Login: network", e)
-                "Can't reach MG right now. Try again in a moment." + debugDetail(e)
+                if (e.phoneOffline) "No internet connection. Check your connection and try again."
+                else "Can't reach MG right now. Try again in a moment." + debugDetail(e)
             } catch (e: Exception) {
                 Log.e(TAG, "Login failed", e)
                 "Login failed." + debugDetail(e)

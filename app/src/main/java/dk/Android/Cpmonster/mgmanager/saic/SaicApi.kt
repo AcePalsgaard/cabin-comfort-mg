@@ -212,8 +212,9 @@ class SaicApi(
         val response = try {
             http.newCall(rb.build()).execute()
         } catch (e: IOException) {
-            ServerStatus.end(probe, ok = false, offline = isPhoneOffline(e))
-            throw SaicNetworkException("Network error: ${e.message}", e)
+            val offline = isPhoneOffline(e)
+            ServerStatus.end(probe, ok = false, offline = offline)
+            throw SaicNetworkException("Network error: ${e.message}", e, phoneOffline = offline)
         }
         val envelope = try {
             parse(response)

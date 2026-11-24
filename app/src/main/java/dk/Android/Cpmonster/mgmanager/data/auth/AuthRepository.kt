@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
+import dk.Android.Cpmonster.mgmanager.saic.LoginThrottledException
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -40,17 +42,34 @@ data class AuthState(
      * The background queue checks it as soon as the servers answer.
      */
     val unverified: Boolean = false,
+    /** What MG said when it last rejected the stored login in the background. */
+    val rejectReason: String? = null,
 ) {
     val isLoggedIn get() = isDemo || (hasCredentials && !needsLogin)
 }
 
-/** When a background re-login that MG rejected should send the user back to the login screen. */
+/** Rules for background logins: how often to try, and when to give up on the stored login. */
 object LoginRejection {
     /** MG must still reject the login this long after the first "no". */
     const val CONFIRM_AFTER_MS = 60_000L
+    /** Never log in more often than this in the background, even after a success. */
+    const val MIN_GAP_MS = 30_000L
+    /** Longest wait between background logins while MG keeps saying no. */
+    const val MAX_GAP_MS = 10 * 60_000L
 
     fun shouldLogOut(firstRejectedAt: Long?, now: Long): Boolean =
         firstRejectedAt != null && now - firstRejectedAt >= CONFIRM_AFTER_MS
+
+    /**
+     * Earliest time the background may log in again. Logging in over and over can make MG
+     * block the account, so the gap doubles with each rejection (30 s, 1 min, 2 min … 10 min).
+     */
+    fun nextLoginAt(lastAttemptAt: Long?, rejections: Int): Long {
+        if (lastAttemptAt == null) return 0L
+        val gap = if (rejections <= 1) MIN_GAP_MS
+        else minOf(MIN_GAP_MS shl minOf(rejections - 1, 10), MAX_GAP_MS)
+        return lastAttemptAt + gap
+    }
 }
 
 /**
@@ -84,6 +103,11 @@ class AuthRepository(
         val UNVERIFIED = booleanPreferencesKey("unverified")
         /** When MG first rejected the stored login in the background (cleared on success). */
         val REJECTED_SINCE = longPreferencesKey("rejected_since")
+        /** Rejections in a row, and MG's last reason (cleared on success). */
+        val REJECT_COUNT = intPreferencesKey("reject_count")
+        val REJECT_REASON = stringPreferencesKey("reject_reason")
+        /** Last time we asked MG for a token, user or background. */
+        val LAST_LOGIN_AT = longPreferencesKey("last_login_at")
     }
 
     val state: Flow<AuthState> = store.data.map { it.toState() }
@@ -111,6 +135,7 @@ class AuthRepository(
         needsLogin = this[K.NEEDS_LOGIN] ?: false,
         isDemo = this[K.DEMO] ?: false,
         unverified = this[K.UNVERIFIED] ?: false,
+        rejectReason = this[K.REJECT_REASON],
     )
 
     /**
@@ -139,6 +164,9 @@ class AuthRepository(
                 it.remove(K.DEMO)
                 if (result == null) it[K.UNVERIFIED] = true else it.remove(K.UNVERIFIED)
                 it.remove(K.REJECTED_SINCE)
+                it.remove(K.REJECT_COUNT)
+                it.remove(K.REJECT_REASON)
+                it[K.LAST_LOGIN_AT] = System.currentTimeMillis()
                 it.remove(K.TOKEN)
                 it.remove(K.TOKEN_EXPIRY)
             }
@@ -175,6 +203,18 @@ class AuthRepository(
 
         val hash = runCatching { cipher.decrypt(p[K.PASSWORD]!!) }.getOrNull()
             ?: run { markNeedsLogin(); throw NeedsLoginException() }
+
+        // Don't hammer MG with logins: that can get the account blocked.
+        val rejections = p[K.REJECT_COUNT] ?: 0
+        val nextAt = LoginRejection.nextLoginAt(p[K.LAST_LOGIN_AT], rejections)
+        if (now < nextAt) {
+            throw LoginThrottledException(
+                nextAt,
+                if (rejections > 0) "Waiting before logging in again (${p[K.REJECT_REASON]})" else "Logged in moments ago",
+            )
+        }
+        store.edit { it[K.LAST_LOGIN_AT] = now }
+
         val api = SaicApi(http, s.region)
         val result = try {
             api.login(s.username!!, hash, s.isEmail, s.countryCode)
@@ -182,15 +222,21 @@ class AuthRepository(
             // MG sometimes says no while it's struggling. Only give up on the stored login
             // when it still says no a while later; until then the queue retries quietly.
             val since = p[K.REJECTED_SINCE]
+            store.edit {
+                if (since == null) it[K.REJECTED_SINCE] = now
+                it[K.REJECT_COUNT] = rejections + 1
+                it[K.REJECT_REASON] = e.message ?: "Login rejected"
+            }
             if (LoginRejection.shouldLogOut(since, now)) {
                 markNeedsLogin()
                 throw NeedsLoginException()
             }
-            if (since == null) store.edit { it[K.REJECTED_SINCE] = now }
             throw e
         }
         store.edit {
             it.remove(K.REJECTED_SINCE)
+            it.remove(K.REJECT_COUNT)
+            it.remove(K.REJECT_REASON)
             it.remove(K.UNVERIFIED)
         }
         saveToken(api, result)

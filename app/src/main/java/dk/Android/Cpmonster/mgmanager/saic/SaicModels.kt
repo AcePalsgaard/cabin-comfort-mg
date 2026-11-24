@@ -37,6 +37,13 @@ class SaicLoginRejectedException(message: String) : SaicApiException(message)
 /** The car answered, but key data (temperatures, battery) was missing. Retried a limited number of times. */
 class SaicIncompleteDataException(message: String) : SaicApiException(message)
 class NeedsLoginException : Exception("Login required")
+/**
+ * The car refuses remote commands until it has been started with the key and locked again
+ * (MG code 8, "Too frequent operations … (71)"). Retrying only makes it worse.
+ */
+class SaicCarBlockedException(message: String) : SaicApiException(message, 8)
+/** A background login was tried too recently; try again at [retryAt]. Nothing was sent. */
+class LoginThrottledException(val retryAt: Long, message: String) : Exception(message)
 
 data class LoginResult(val accessToken: String, val expiresInSec: Long, val userName: String?)
 

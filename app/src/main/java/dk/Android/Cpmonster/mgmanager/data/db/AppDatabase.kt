@@ -51,6 +51,9 @@ abstract class JobDao {
     @Query("SELECT COUNT(*) FROM jobs")
     abstract fun countFlow(): Flow<Int>
 
+    @Query("SELECT DISTINCT type FROM jobs")
+    abstract fun typesFlow(): Flow<List<String>>
+
     @Query("UPDATE jobs SET attempts = :attempts, nextRunAt = :nextRunAt, lastError = :error WHERE id = :id")
     abstract suspend fun reschedule(id: Long, attempts: Int, nextRunAt: Long, error: String?)
 

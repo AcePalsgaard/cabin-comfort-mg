@@ -103,6 +103,9 @@ class LoginViewModel(private val c: AppContainer) : ViewModel() {
                     error = when {
                         // Logged in while MG was down; now MG is back and said no.
                         s.needsLogin && s.unverified -> "MG is back online but didn't accept that login. Please check your username and password."
+                        s.needsLogin && s.rejectReason != null ->
+                            "MG stopped accepting the saved login. MG said: ${s.rejectReason}\n" +
+                                "Please log in again. If it keeps happening, wait a few minutes and check your password in iSMART."
                         s.needsLogin -> "Please log in again"
                         else -> null
                     },

@@ -46,6 +46,7 @@ class AppContainer(private val context: Context) {
         vehicle = vehicle,
         scope = scope,
         afterRefresh = { controller.reconcile(it) },
+        onCarBlocked = { controller.abort() },
         demo = demoCar,
     )
 

@@ -59,6 +59,9 @@ class SaicApi(
             )
         } catch (e: SaicNetworkException) {
             throw e
+        } catch (e: SaicAuthException) {
+            // HTTP 401/403 on the login itself: wrong password, or MG blocking the account for a while.
+            throw SaicLoginRejectedException("MG didn't accept the login (${e.message})")
         } catch (e: SaicApiException) {
             throw SaicLoginRejectedException(e.message ?: "Login failed")
         }
@@ -138,7 +141,8 @@ class SaicApi(
         query: List<Pair<String, String>> = emptyList(),
         body: String? = null,
         contentType: String? = null,
-        timeoutMs: Long = 45_000,
+        // Same as saic-python-client-ng: a car that hasn't answered in 30 s rarely does.
+        timeoutMs: Long = 30_000,
         pollDelayMs: Long = 3_000,
     ): JSONObject? {
         var eventId = "0"
@@ -160,6 +164,9 @@ class SaicApi(
         val code = env.json.optInt("code", -1)
         val msg = env.json.optString("message", "Unknown error")
         if (code == 401 || code == 403) throw SaicAuthException(msg)
+        // Final answers: polling the same event again won't change them.
+        if (code == CODE_CAR_BLOCKED) throw SaicCarBlockedException(msg)
+        if (code in FINAL_CODES) throw SaicApiException(msg, code)
         if (env.eventId != null && !env.json.has("data")) throw EventPending(env.eventId)
         if (code != 0) {
             if (requestEventId != null && requestEventId != "0") throw EventPending(requestEventId)
@@ -227,6 +234,14 @@ class SaicApi(
             throw e
         }
         ServerStatus.end(probe, ok = true)
+        if (dk.Android.Cpmonster.mgmanager.DevOnly.ENABLED) {
+            val j = envelope.json
+            android.util.Log.d(
+                "SaicApi",
+                "$method $path event-id=${headers["event-id"]} -> code=${j.opt("code")} " +
+                    "msg=${j.optString("message")} eventId=${envelope.eventId} data=${j.has("data")}",
+            )
+        }
         envelope
     }
 
@@ -248,17 +263,22 @@ class SaicApi(
             } catch (e: IOException) {
                 throw SaicNetworkException("Network error: ${e.message}", e)
             }
-            if (r.code == 401 || r.code == 403) throw SaicAuthException("HTTP ${r.code}")
-            if (!r.isSuccessful) throw SaicNetworkException("HTTP ${r.code}")
             val sendDate = r.header("APP-SEND-DATE")
             val originalCt = r.header("ORIGINAL-CONTENT-TYPE")
-            val text = if (raw.isNotEmpty() && !raw.startsWith("{") && sendDate != null && originalCt != null) {
-                try {
-                    SaicCrypto.decryptResponse(raw, sendDate, originalCt)
-                } catch (e: Exception) {
-                    throw SaicNetworkException("Could not decrypt response", e)
-                }
+            fun decrypted(): String = if (raw.isNotEmpty() && !raw.startsWith("{") && sendDate != null && originalCt != null) {
+                SaicCrypto.decryptResponse(raw, sendDate, originalCt)
             } else raw
+            if (r.code == 401 || r.code == 403) {
+                // Keep MG's own reason when there is one: it's what we show the user.
+                val reason = runCatching { JSONObject(decrypted()).optString("message") }.getOrNull()
+                throw SaicAuthException(reason?.ifBlank { null } ?: "HTTP ${r.code}")
+            }
+            if (!r.isSuccessful) throw SaicNetworkException("HTTP ${r.code}")
+            val text = try {
+                decrypted()
+            } catch (e: Exception) {
+                throw SaicNetworkException("Could not decrypt response", e)
+            }
             val json = try {
                 JSONObject(text)
             } catch (e: Exception) {
@@ -284,5 +304,9 @@ class SaicApi(
     companion object {
         const val JSON = "application/json"
         const val FORM = "application/x-www-form-urlencoded"
+        /** "Too frequent operations. Please use the physical key to restart the vehicle…" */
+        const val CODE_CAR_BLOCKED = 8
+        /** Codes saic-python-client-ng never retries. */
+        val FINAL_CODES = setOf(2, 3, 7)
     }
 }

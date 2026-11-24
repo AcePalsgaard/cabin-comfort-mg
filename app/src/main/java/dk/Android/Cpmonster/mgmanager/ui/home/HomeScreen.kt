@@ -140,11 +140,30 @@ data class HomeUi(
     val activeId: Long? = null,
     val active: ActiveProfile? = null,
     val suggestion: Profile? = null,
+    /** Fetching car data from MG. */
     val syncing: Boolean = false,
     val notice: String? = null,
     val carColorOverride: CarColor? = null,
     val carPhoto: Long? = null,
+    /** The heating/A/C command is on its way to the car (waiting for the car, not for MG). */
+    val sending: Boolean = false,
+    /** e.g. "Seat heating and steering wheel on the way…", null when nothing extra is waiting. */
+    val extras: String? = null,
 )
+
+private data class QueueView(val refreshing: Boolean, val sending: Boolean, val dropped: String?, val extras: Set<JobType>)
+
+/** Small line for extras still waiting for the car. */
+internal fun extrasText(waiting: Set<JobType>): String? {
+    val names = listOfNotNull(
+        "seat heating".takeIf { JobType.SEATS in waiting },
+        "steering wheel".takeIf { JobType.STEERING_WHEEL in waiting },
+        "rear window".takeIf { JobType.REAR_WINDOW in waiting },
+    )
+    if (names.isEmpty()) return null
+    val list = if (names.size == 1) names[0] else names.dropLast(1).joinToString(", ") + " and " + names.last()
+    return list.replaceFirstChar { it.uppercase() } + " on the way…"
+}
 
 class HomeViewModel(private val c: AppContainer) : ViewModel() {
     private val dismissedFor = MutableStateFlow<Long?>(null)
@@ -153,12 +172,12 @@ class HomeViewModel(private val c: AppContainer) : ViewModel() {
         combine(c.vehicle.state, c.settings.carColor, c.settings.carPhoto) { v, o, p -> Triple(v, o, p) },
         c.profiles.profiles,
         c.profiles.active,
-        combine(c.queue.pendingCount, c.queue.lastDropped) { n, d -> n to d },
+        combine(c.queue.refreshing, c.queue.sending, c.queue.lastDropped, c.queue.extrasWaiting) { r, s, d, x -> QueueView(r, s, d, x) },
         dismissedFor,
-    ) { (vehicle, colorOverride, photo), profiles, active, (pending, dropped), dismissed ->
+    ) { (vehicle, colorOverride, photo), profiles, active, q, dismissed ->
         val suggestion = ProfileSuggester.suggest(vehicle?.exteriorTemp, profiles, active?.id)
             ?.takeIf { it.id != dismissed }
-        HomeUi(vehicle, profiles, active?.id, active, suggestion, pending > 0, dropped, colorOverride, photo)
+        HomeUi(vehicle, profiles, active?.id, active, suggestion, q.refreshing, q.dropped, colorOverride, photo, q.sending, extrasText(q.extras))
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUi())
 
     init {
@@ -235,7 +254,7 @@ fun HomeScreen(
         val wide = dk.Android.Cpmonster.mgmanager.ui.components.isWideLayout()
         val carPart: @Composable ColumnScope.() -> Unit = {
             if (isDemo) DemoBanner(onExitDemo)
-            HeroCard(ui.vehicle, ui.syncing, ui.notice, activeProfile, accent, carColor(ui.carColorOverride, ui.vehicle), rememberCarPhoto(ui.carPhoto), server, onRefresh = { viewModel.refresh() })
+            HeroCard(ui.vehicle, ui.syncing, ui.sending, ui.extras, ui.notice, activeProfile, accent, carColor(ui.carColorOverride, ui.vehicle), rememberCarPhoto(ui.carPhoto), server, onRefresh = { viewModel.refresh() })
         }
         val profilesPart: @Composable ColumnScope.() -> Unit = {
             AnimatedVisibility(visible = ui.suggestion != null) {
@@ -342,6 +361,8 @@ private fun DemoBanner(onExit: () -> Unit) {
 private fun HeroCard(
     v: VehicleState?,
     syncing: Boolean,
+    sending: Boolean,
+    extras: String?,
     notice: String?,
     activeProfile: Profile?,
     accent: Color,
@@ -398,6 +419,7 @@ private fun HeroCard(
                 Column(Modifier.weight(1f)) {
                     Text(v?.model ?: "Your MG", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     val sub = when {
+                        sending -> "Sending to car…"
                         syncing -> "Updating…"
                         v?.updatedAt != null -> "Updated " + DateUtils.getRelativeTimeSpanString(
                             v.updatedAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS,
@@ -447,6 +469,14 @@ private fun HeroCard(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StatPill(Icons.Rounded.Thermostat, "Inside", v?.interiorTemp?.let { "$it°" }, null, Modifier.weight(1f))
                 StatPill(Icons.Rounded.BatteryStd, "Battery", v?.batterySoc?.let { "${it.toInt()}%" }, v?.batterySoc?.let { it.toFloat() / 100f }, Modifier.weight(1f))
+            }
+            AnimatedVisibility(visible = extras != null && notice == null) {
+                Text(
+                    extras.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
             }
             notice?.let {
                 Spacer(Modifier.height(12.dp))

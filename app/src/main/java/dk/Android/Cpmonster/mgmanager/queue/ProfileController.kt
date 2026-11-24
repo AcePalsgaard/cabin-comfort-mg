@@ -88,6 +88,17 @@ class ProfileController(
         profiles.get(a.id)?.let { ClimateSession.showPrompt(context, it) }
     }
 
+    /**
+     * The car refuses remote commands: end the session quietly without sending anything
+     * (a stop command would be refused too and only extend the block).
+     */
+    suspend fun abort() = lock.withLock {
+        if (profiles.activeNow() == null) return@withLock
+        profiles.clearActive()
+        ClimateSession.cancelAlarms(context)
+        ClimateSession.clearAll(context)
+    }
+
     /** "Continue" from the prompt: one more run after the current one. */
     suspend fun continueOneMore() = lock.withLock {
         ClimateSession.clearPrompt(context)

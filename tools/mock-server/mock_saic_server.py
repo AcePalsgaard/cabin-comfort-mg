@@ -125,6 +125,8 @@ class State:
         self.tokens: dict[str, float] = {}
         self.events: dict[str, int] = {}  # event id -> calls left before data is ready
         self.reject_logins_until = 0.0
+        self.http401_logins_until = 0.0
+        self.block_car_until = 0.0
 
 
 def make_handler(state: State):
@@ -255,12 +257,23 @@ def make_handler(state: State):
             """Test switches, called from the PC (plain JSON, no encryption):
             /mock/reject-logins?seconds=N  - every login says "wrong password" for N seconds
             /mock/expire-tokens           - forget all tokens so the app has to log in again
+            /mock/http401-logins?seconds=N - every login gets HTTP 401 (like a blocked account) for N seconds
+            /mock/block-car?seconds=N      - commands get code 8 "Too frequent operations" for N seconds
             """
             q = {k: v[0] for k, v in parse_qs(url.query).items()}
             if url.path == "/mock/reject-logins":
                 secs = float(q.get("seconds", "60"))
                 state.reject_logins_until = time.time() + secs
                 log(f"MOCK: rejecting all logins for {secs:.0f}s")
+            elif url.path == "/mock/http401-logins":
+                secs = float(q.get("seconds", "300"))
+                state.http401_logins_until = time.time() + secs
+                state.tokens.clear()
+                log(f"MOCK: HTTP 401 on all logins for {secs:.0f}s (tokens expired)")
+            elif url.path == "/mock/block-car":
+                secs = float(q.get("seconds", "600"))
+                state.block_car_until = time.time() + secs
+                log(f"MOCK: car blocks remote commands for {secs:.0f}s")
             elif url.path == "/mock/expire-tokens":
                 state.tokens.clear()
                 log("MOCK: all tokens expired")
@@ -273,6 +286,9 @@ def make_handler(state: State):
         def login(self, q, body: str):
             form = {k: v[0] for k, v in parse_qs(body).items()}
             user = form.get("username", "?")
+            if time.time() < state.http401_logins_until:
+                log(f"LOGIN {user} -> HTTP 401 (mock switch)")
+                return self.send_json(401, {"code": 401, "message": "Unauthorized"}, plain=True)
             if time.time() < state.reject_logins_until:
                 log(f"LOGIN {user} -> rejected (mock switch)")
                 return self.send_json(200, {"code": 1, "message": "Incorrect username or password"})
@@ -329,6 +345,10 @@ def make_handler(state: State):
         def control(self, q, body: str):
             if not self.event_gate("control"):
                 return
+            if time.time() < state.block_car_until:
+                log("POST control -> code 8, car blocks remote commands (mock switch)")
+                return self.send_json(200, {"code": 8, "message": "Too frequent operations. Please use the physical key "
+                                            "to restart the vehicle, lock the car and turn off the engine, and then try again.(71)"})
             try:
                 req = json.loads(body)
             except Exception:

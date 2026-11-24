@@ -40,14 +40,14 @@ object ClimateSession {
     fun createChannels(context: Context) {
         val nm = context.getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(
-            NotificationChannel(CH_ACTIVE, "Climate running", NotificationManager.IMPORTANCE_LOW).apply {
+            NotificationChannel(CH_ACTIVE, "A/C running", NotificationManager.IMPORTANCE_LOW).apply {
                 description = "Shows progress while the car is being heated or cooled"
                 setShowBadge(false)
             },
         )
         nm.createNotificationChannel(
-            NotificationChannel(CH_PROMPT, "Continue climate?", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Asks one minute before the climate ends if it should keep going"
+            NotificationChannel(CH_PROMPT, "Continue A/C?", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Asks one minute before the A/C ends if it should keep going"
             },
         )
     }
@@ -139,7 +139,7 @@ object ClimateSession {
         val n = NotificationCompat.Builder(context, CH_ACTIVE)
             .setSmallIcon(R.drawable.ic_stat_climate)
             .setContentTitle("${profile.name} finished")
-            .setContentText("The car has stopped the climate")
+            .setContentText("The car has stopped the A/C")
             .setAutoCancel(true)
             .setTimeoutAfter(30 * 60_000L)
             .setContentIntent(openApp(context))

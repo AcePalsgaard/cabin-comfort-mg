@@ -18,7 +18,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -93,14 +92,6 @@ fun ProfileEditScreen(viewModel: ProfileEditViewModel, onDone: () -> Unit, modif
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        OutlinedTextField(
-            value = profile.name,
-            onValueChange = { v -> viewModel.edit { it.copy(name = v.take(24)) } },
-            label = { Text("Name") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-        )
-
         Section("Cabin") {
             val temp = profile.targetTemp.coerceIn(car.minTemp, car.maxTemp)
             LabeledValue("Temperature", "${temp}°C")
@@ -158,7 +149,7 @@ fun ProfileEditScreen(viewModel: ProfileEditViewModel, onDone: () -> Unit, modif
             val runs = profile.runs.coerceIn(1, 4)
             LabeledValue("Runs", "${runs * ActiveProfile.RUN_MINUTES} min")
             Text(
-                "The car stops climate after ${ActiveProfile.RUN_MINUTES} min. Each run restarts it. " +
+                "The car stops the A/C after ${ActiveProfile.RUN_MINUTES} min. Each run restarts it. " +
                     "One minute before the last run ends you're asked whether to continue.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

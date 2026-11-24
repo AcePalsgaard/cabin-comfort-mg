@@ -1,5 +1,25 @@
 package dk.Android.Cpmonster.mgmanager.ui.home
 
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -14,6 +34,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -202,52 +229,93 @@ fun HomeScreen(
         },
         modifier = modifier.fillMaxSize(),
     ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        if (isDemo) DemoBanner(onExitDemo)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Landscape / wide screens: car on the left, suggestion and profiles on the right,
+        // each scrolling on its own. One full-width card looked stretched and pushed the profiles off-screen.
+        val wide = maxWidth >= 600.dp && maxWidth > maxHeight
+        val carPart: @Composable ColumnScope.() -> Unit = {
+            if (isDemo) DemoBanner(onExitDemo)
+            HeroCard(ui.vehicle, ui.syncing, ui.notice, activeProfile, accent, carColor(ui.carColorOverride, ui.vehicle), rememberCarPhoto(ui.carPhoto), server, onRefresh = { viewModel.refresh() })
+        }
+        val profilesPart: @Composable ColumnScope.() -> Unit = {
+            AnimatedVisibility(visible = ui.suggestion != null) {
+                ui.suggestion?.let { s ->
+                    SuggestionCard(
+                        profile = s,
+                        outsideTemp = ui.vehicle?.exteriorTemp,
+                        onAccept = { askForNotifications(); viewModel.accept(s) },
+                    )
+                }
+            }
 
-        HeroCard(ui.vehicle, ui.syncing, ui.notice, activeProfile, accent, carColor(ui.carColorOverride, ui.vehicle), rememberCarPhoto(ui.carPhoto), server, onRefresh = { viewModel.refresh() })
-
-        AnimatedVisibility(visible = ui.suggestion != null) {
-            ui.suggestion?.let { s ->
-                SuggestionCard(
-                    profile = s,
-                    outsideTemp = ui.vehicle?.exteriorTemp,
-                    onAccept = { askForNotifications(); viewModel.accept(s) },
-                    onDismiss = { viewModel.dismiss(s) },
+            Column(Modifier.padding(top = 6.dp, start = 4.dp)) {
+                Text("A/C profiles", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "Tap to start or stop · hold to edit",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+
+            if (ui.profiles.isEmpty()) {
+                Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+            // Profiles side by side, two per row (quick-settings style).
+            ui.profiles.chunked(2).forEach { pair ->
+                Row(
+                    Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    pair.forEach { p ->
+                        ProfileTile(
+                            profile = p,
+                            active = p.id == ui.activeId,
+                            session = ui.active?.takeIf { it.id == p.id },
+                            onToggle = { on -> if (on) askForNotifications(); viewModel.setActive(p, on) },
+                            onEdit = { onEditProfile(p.id) },
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                        )
+                    }
+                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
+            Spacer(Modifier.height(8.dp))
         }
 
-        Column(Modifier.padding(top = 6.dp, start = 4.dp)) {
-            Text("Climate profiles", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            Text(
-                "Tap a profile to start or stop it",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        if (ui.profiles.isEmpty()) {
-            Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+        if (wide) {
+            Row(
+                Modifier
+                    .fillMaxSize()
+                    // Keep clear of a camera cutout on the side in landscape.
+                    .windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal))
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Column(
+                    Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    content = carPart,
+                )
+                Column(
+                    Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()).padding(vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    content = profilesPart,
+                )
+            }
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                carPart()
+                profilesPart()
             }
         }
-        ui.profiles.forEach { p ->
-            ProfileRow(
-                profile = p,
-                active = p.id == ui.activeId,
-                session = ui.active?.takeIf { it.id == p.id },
-                onToggle = { on -> if (on) askForNotifications(); viewModel.setActive(p, on) },
-                onEdit = { onEditProfile(p.id) },
-            )
-        }
-        Spacer(Modifier.height(8.dp))
     }
     }
 }
@@ -367,7 +435,7 @@ private fun HeroCard(
                     Text(
                         when {
                             activeProfile != null -> if (activeProfile.kind == ProfileKind.COLD) "Warming up the cabin" else "Cooling down the cabin"
-                            else -> "Climate is off"
+                            else -> "A/C is off"
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
@@ -423,7 +491,7 @@ private fun StatPill(icon: ImageVector, label: String, value: String?, progress:
 }
 
 @Composable
-private fun SuggestionCard(profile: Profile, outsideTemp: Int?, onAccept: () -> Unit, onDismiss: () -> Unit) {
+private fun SuggestionCard(profile: Profile, outsideTemp: Int?, onAccept: () -> Unit) {
     val color = profile.kind.color()
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -437,53 +505,30 @@ private fun SuggestionCard(profile: Profile, outsideTemp: Int?, onAccept: () -> 
                 Text("It's ${outsideTemp ?: "–"}° outside", style = MaterialTheme.typography.titleSmall)
                 Text("${profile.name} the car?", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            TextButton(onClick = onDismiss) { Text("Not now") }
-            Button(
+            FilledIconButton(
                 onClick = onAccept,
-                colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = Color.White),
-            ) { Text("Start") }
+                colors = IconButtonDefaults.filledIconButtonColors(containerColor = color, contentColor = Color.White),
+                modifier = Modifier.size(48.dp),
+            ) { Icon(Icons.Rounded.PlayArrow, "Start ${profile.name}") }
         }
     }
 }
 
-@Composable
-private fun ProfileRow(
-    profile: Profile,
-    active: Boolean,
-    session: ActiveProfile?,
-    onToggle: (Boolean) -> Unit,
-    onEdit: () -> Unit,
-) {
-    Row(
-        Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        ProfileTile(profile, active, session, onToggle, Modifier.weight(1f))
-        Surface(
-            onClick = onEdit,
-            modifier = Modifier.width(60.dp).fillMaxHeight(),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Rounded.Edit,
-                    contentDescription = "Edit ${profile.name}",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
-
+/**
+ * One button per profile, like Google Home / quick-settings tiles:
+ * tap = start/stop, long-press or the small settings icon inside the tile = edit.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ProfileTile(
     profile: Profile,
     active: Boolean,
     session: ActiveProfile?,
     onToggle: (Boolean) -> Unit,
+    onEdit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val haptics = LocalHapticFeedback.current
     val context = LocalContext.current
     val color = profile.kind.color()
     val deep = profile.kind.deepColor()
@@ -491,53 +536,97 @@ private fun ProfileTile(
     val start by animateColorAsState(if (active) color else idle, label = "tileStart")
     val end by animateColorAsState(if (active) deep else idle, label = "tileEnd")
     val content = if (active) Color.White else MaterialTheme.colorScheme.onSurface
-    val sub = if (active) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
+
+    // Running: the tile glows in the profile's colour, with a slow "breathing" light behind the icon
+    // and a soft sheen drifting across. Off: plain tile, tinted icon. The whole tile is the toggle.
+    val pulse = rememberInfiniteTransition(label = "tilePulse")
+    val breath by pulse.animateFloat(
+        0f, 1f, infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "breath",
+    )
+    val sheen by pulse.animateFloat(
+        -0.4f, 1.4f, infiniteRepeatable(tween(3200, easing = LinearEasing)), label = "sheen",
+    )
+    val glow by animateFloatAsState(if (active) 1f else 0f, label = "glow")
 
     Box(
         modifier
-            .clip(RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(20.dp))
             .background(Brush.horizontalGradient(listOf(start, end)))
-            .clickable { onToggle(!active) },
-    ) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .size(52.dp)
-                    .clip(CircleShape)
-                    .background(if (active) Color.White.copy(alpha = 0.2f) else color.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(profile.kind.icon(), null, tint = if (active) Color.White else color, modifier = Modifier.size(28.dp))
-            }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(profile.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = content)
-                Text(profile.summary(), style = MaterialTheme.typography.bodySmall, color = sub)
-                if (session != null) {
-                    val until = DateFormat.getTimeFormat(context).format(Date(session.sessionEndsAt))
-                    Spacer(Modifier.height(6.dp))
-                    Surface(shape = RoundedCornerShape(50), color = Color.White.copy(alpha = 0.22f)) {
-                        Text(
-                            "Run ${session.run} of ${session.runs} · until $until",
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = content,
-                        )
-                    }
+            .drawWithContent {
+                drawContent()
+                if (glow > 0f) {
+                    val x = size.width * sheen
+                    drawRect(
+                        Brush.linearGradient(
+                            listOf(Color.Transparent, Color.White.copy(alpha = 0.16f * glow), Color.Transparent),
+                            start = Offset(x - size.width * 0.25f, 0f),
+                            end = Offset(x + size.width * 0.25f, size.height),
+                        ),
+                    )
                 }
             }
-            Spacer(Modifier.width(8.dp))
-            Switch(
-                checked = active,
-                onCheckedChange = onToggle,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = color,
-                    checkedTrackColor = Color.White,
-                    checkedBorderColor = Color.White,
-                ),
+            .combinedClickable(
+                role = Role.Switch,
+                onClickLabel = if (active) "Stop" else "Start",
+                onLongClickLabel = "Edit",
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onEdit()
+                },
+                onClick = { onToggle(!active) },
             )
+            .semantics {
+                contentDescription = profile.name
+                stateDescription = if (active) "On" else "Off"
+            },
+    ) {
+      Column {
+        Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .graphicsLayer {
+                            val s = 1f + 0.12f * breath * glow
+                            scaleX = s
+                            scaleY = s
+                        }
+                        .clip(CircleShape)
+                        .background(
+                            if (active) Color.White.copy(alpha = 0.18f + 0.14f * breath * glow)
+                            else color.copy(alpha = 0.15f),
+                        ),
+                )
+                Icon(profile.kind.icon(), null, tint = if (active) Color.White else color, modifier = Modifier.size(24.dp))
+            }
+            Spacer(Modifier.weight(1f))
+            IconButton(onClick = onEdit) {
+                Icon(
+                    Icons.Rounded.Tune,
+                    contentDescription = "Edit ${profile.name}",
+                    tint = if (active) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
         }
+        if (session != null) {
+            val until = DateFormat.getTimeFormat(context).format(Date(session.sessionEndsAt))
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = Color.White.copy(alpha = 0.22f),
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+            ) {
+                Text(
+                    "${session.run}/${session.runs} · until $until",
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = content,
+                    maxLines = 1,
+                )
+            }
+        }
+      }
     }
 }
 
@@ -545,12 +634,3 @@ private fun ProfileTile(
 fun ProfileKind.color() = if (this == ProfileKind.COLD) WarmColor else ColdColor
 private fun ProfileKind.deepColor() = if (this == ProfileKind.COLD) WarmDeep else ColdDeep
 fun ProfileKind.icon() = if (this == ProfileKind.COLD) Icons.Rounded.LocalFireDepartment else Icons.Rounded.AcUnit
-
-private fun Profile.summary(): String = buildList {
-    add("${targetTemp}°")
-    add("${runs * ActiveProfile.RUN_MINUTES} min")
-    if (kind == ProfileKind.COLD && frontDefrost) add("defrost")
-    if (seatLeft > 0 || seatRight > 0) add("seats $seatLeft/$seatRight")
-    if (steeringWheel) add("wheel")
-    if (rearWindow) add("rear window")
-}.joinToString(" · ")

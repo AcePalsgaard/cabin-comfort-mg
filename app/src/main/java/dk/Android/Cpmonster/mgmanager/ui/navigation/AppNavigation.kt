@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -35,7 +36,11 @@ import dk.Android.Cpmonster.mgmanager.data.auth.AuthState
 import dk.Android.Cpmonster.mgmanager.navigation.Screen
 import dk.Android.Cpmonster.mgmanager.saic.SaicRegion
 import dk.Android.Cpmonster.mgmanager.ui.about.AboutScreen
+import dk.Android.Cpmonster.mgmanager.ui.components.MGManagerSideBar
 import dk.Android.Cpmonster.mgmanager.ui.components.MGManagerTopAppBar
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.platform.LocalConfiguration
+import android.content.res.Configuration
 import dk.Android.Cpmonster.mgmanager.ui.home.HomeScreen
 import dk.Android.Cpmonster.mgmanager.ui.home.HomeViewModel
 import dk.Android.Cpmonster.mgmanager.ui.login.LoginScreen
@@ -79,7 +84,12 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
     val canNavigateBack = backStack.size > 1
 
     // Logging in or out always lands on that state's start screen.
+    // Only on a real change: after a rotation this effect runs again, and resetting then
+    // threw the user from e.g. Settings back to the front page.
+    var lastLoggedIn by rememberSaveable { mutableStateOf(isLoggedIn) }
     LaunchedEffect(isLoggedIn) {
+        if (isLoggedIn == lastLoggedIn) return@LaunchedEffect
+        lastLoggedIn = isLoggedIn
         if (backStack.size == 1 && backStack[0] == home) return@LaunchedEffect
         backStack.add(home)
         while (backStack.size > 1) backStack.removeAt(0)
@@ -102,6 +112,7 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
     val vehicleState by container.vehicle.state.collectAsStateWithLifecycle(null)
     val carColorOverride by container.settings.carColor.collectAsStateWithLifecycle(null)
     val carPhoto by container.settings.carPhoto.collectAsStateWithLifecycle(null)
+    val profiles by container.profiles.profiles.collectAsStateWithLifecycle(emptyList())
     val showTestServer = dk.Android.Cpmonster.mgmanager.DevOnly.ENABLED // DEV-ONLY
     val serverState by dk.Android.Cpmonster.mgmanager.saic.ServerStatus.state.collectAsStateWithLifecycle()
     // The front page has its own status ring next to the car; other screens get the top-bar icon.
@@ -145,13 +156,25 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
         Screen.Login -> ""
         Screen.Settings -> "Settings"
         Screen.About -> "About"
-        is Screen.ProfileEdit -> "Edit profile"
+        // Say which profile is being edited, e.g. "Warm up".
+        is Screen.ProfileEdit -> profiles.firstOrNull { it.id == currentScreen.id }?.name ?: "Edit profile"
+    }
+
+    // Landscape: no top bar (it eats a third of the height); a slim toolbar on the right instead.
+    val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val onLogout = {
+        if (auth.isDemo) {
+            scope.launch { container.logout() }
+        } else {
+            confirmLogout = true
+        }
+        Unit
     }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
-            MGManagerTopAppBar(
+            if (!landscape) MGManagerTopAppBar(
                 title = title,
                 canNavigateBack = canNavigateBack,
                 onNavigateBack = { navigateBack() },
@@ -160,21 +183,16 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
                 showAboutItem = currentScreen != Screen.About,
                 onAbout = { navigateTo(Screen.About) },
                 isLoggedIn = isLoggedIn,
-                onLogout = {
-                    if (auth.isDemo) {
-                        scope.launch { container.logout() }
-                    } else {
-                        confirmLogout = true
-                    }
-                },
+                onLogout = onLogout,
                 logoutLabel = if (auth.isDemo) "Exit demo" else "Log out",
                 serverDown = serverDown && currentScreen != Screen.Main,
             )
         },
     ) { innerPadding ->
+      Row(Modifier.padding(innerPadding).fillMaxSize()) {
         NavDisplay(
             backStack = backStack,
-            modifier = Modifier.padding(innerPadding),
+            modifier = Modifier.weight(1f),
             entryDecorators = listOf(
                 rememberSaveableStateHolderNavEntryDecorator(),
                 rememberViewModelStoreNavEntryDecorator(),
@@ -252,5 +270,20 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
                 }
             }
         }
+        if (landscape) {
+            MGManagerSideBar(
+                canNavigateBack = canNavigateBack,
+                onNavigateBack = { navigateBack() },
+                onSettingsScreen = currentScreen == Screen.Settings,
+                onSettings = { navigateTo(Screen.Settings) },
+                onAboutScreen = currentScreen == Screen.About,
+                onAbout = { navigateTo(Screen.About) },
+                isLoggedIn = isLoggedIn,
+                onLogout = onLogout,
+                logoutLabel = if (auth.isDemo) "Exit demo" else "Log out",
+                serverDown = serverDown && currentScreen != Screen.Main,
+            )
+        }
+      }
     }
 }

@@ -124,6 +124,7 @@ class State:
         self.slow = args.slow
         self.tokens: dict[str, float] = {}
         self.events: dict[str, int] = {}  # event id -> calls left before data is ready
+        self.reject_logins_until = 0.0
 
 
 def make_handler(state: State):
@@ -143,6 +144,8 @@ def make_handler(state: State):
 
         def handle_call(self, method: str) -> None:
             url = urlsplit(self.path)
+            if url.path.startswith("/mock/"):
+                return self.mock_control(url)
             if not url.path.startswith(PREFIX + "/"):
                 return self.send_json(404, {"code": 404, "message": "Not found"})
             sub = url.path[len(PREFIX):]  # e.g. /vehicle/list
@@ -248,11 +251,31 @@ def make_handler(state: State):
             del state.events[eid]
             return True
 
+        def mock_control(self, url) -> None:
+            """Test switches, called from the PC (plain JSON, no encryption):
+            /mock/reject-logins?seconds=N  - every login says "wrong password" for N seconds
+            /mock/expire-tokens           - forget all tokens so the app has to log in again
+            """
+            q = {k: v[0] for k, v in parse_qs(url.query).items()}
+            if url.path == "/mock/reject-logins":
+                secs = float(q.get("seconds", "60"))
+                state.reject_logins_until = time.time() + secs
+                log(f"MOCK: rejecting all logins for {secs:.0f}s")
+            elif url.path == "/mock/expire-tokens":
+                state.tokens.clear()
+                log("MOCK: all tokens expired")
+            else:
+                return self.send_json(404, {"code": 404, "message": "Unknown mock switch"}, plain=True)
+            self.send_json(200, {"code": 0, "message": "ok"}, plain=True)
+
         # ---------- endpoints ----------
 
         def login(self, q, body: str):
             form = {k: v[0] for k, v in parse_qs(body).items()}
             user = form.get("username", "?")
+            if time.time() < state.reject_logins_until:
+                log(f"LOGIN {user} -> rejected (mock switch)")
+                return self.send_json(200, {"code": 1, "message": "Incorrect username or password"})
             if not HAVE_AES:
                 # Can't read the encrypted form without pycryptodome: accept anyone.
                 ok = True

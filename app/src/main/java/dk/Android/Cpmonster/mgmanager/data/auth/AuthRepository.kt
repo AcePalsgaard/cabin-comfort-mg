@@ -44,6 +44,15 @@ data class AuthState(
     val isLoggedIn get() = isDemo || (hasCredentials && !needsLogin)
 }
 
+/** When a background re-login that MG rejected should send the user back to the login screen. */
+object LoginRejection {
+    /** MG must still reject the login this long after the first "no". */
+    const val CONFIRM_AFTER_MS = 60_000L
+
+    fun shouldLogOut(firstRejectedAt: Long?, now: Long): Boolean =
+        firstRejectedAt != null && now - firstRejectedAt >= CONFIRM_AFTER_MS
+}
+
 /**
  * Owns credentials and the API token. Only the SHA-1 of the password is stored
  * (that is what the SAIC API wants), encrypted with a Keystore key.
@@ -73,6 +82,8 @@ class AuthRepository(
         val NEEDS_LOGIN = booleanPreferencesKey("needs_login")
         val DEMO = booleanPreferencesKey("demo")
         val UNVERIFIED = booleanPreferencesKey("unverified")
+        /** When MG first rejected the stored login in the background (cleared on success). */
+        val REJECTED_SINCE = longPreferencesKey("rejected_since")
     }
 
     val state: Flow<AuthState> = store.data.map { it.toState() }
@@ -127,6 +138,7 @@ class AuthRepository(
                 it[K.NEEDS_LOGIN] = false
                 it.remove(K.DEMO)
                 if (result == null) it[K.UNVERIFIED] = true else it.remove(K.UNVERIFIED)
+                it.remove(K.REJECTED_SINCE)
                 it.remove(K.TOKEN)
                 it.remove(K.TOKEN_EXPIRY)
             }
@@ -167,10 +179,20 @@ class AuthRepository(
         val result = try {
             api.login(s.username!!, hash, s.isEmail, s.countryCode)
         } catch (e: SaicLoginRejectedException) {
-            markNeedsLogin()
-            throw NeedsLoginException()
+            // MG sometimes says no while it's struggling. Only give up on the stored login
+            // when it still says no a while later; until then the queue retries quietly.
+            val since = p[K.REJECTED_SINCE]
+            if (LoginRejection.shouldLogOut(since, now)) {
+                markNeedsLogin()
+                throw NeedsLoginException()
+            }
+            if (since == null) store.edit { it[K.REJECTED_SINCE] = now }
+            throw e
         }
-        if (s.unverified) store.edit { it.remove(K.UNVERIFIED) }
+        store.edit {
+            it.remove(K.REJECTED_SINCE)
+            it.remove(K.UNVERIFIED)
+        }
         saveToken(api, result)
         api
     }

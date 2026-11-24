@@ -46,8 +46,9 @@ android {
     buildTypes {
         release {
             if (uploadKeyProps.isNotEmpty()) signingConfig = signingConfigs.getByName("upload")
+            // R8 shrinking/optimisation. Keep this on: Play Vitals flags releases without it.
             optimization {
-                enable = false
+                enable = true
             }
         }
         // Same as release (no test server, not debuggable) but signed with the debug key,

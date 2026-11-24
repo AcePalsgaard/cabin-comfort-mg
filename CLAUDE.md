@@ -31,6 +31,7 @@ Owner: Christian (Denmark). Use Danish date/time format (24h, day-month-year). K
 - Android Studio on Windows; emulator "Med API 36". Check UI changes on the emulator (adb screencap) before calling them done.
 - Unit tests: `.\gradlew testDebugUnitTest`
 - Mock SAIC server for testing: `tools\mock-server\start_mock_server.bat` (debug builds show a "Test server" option; password `test`).
+- Release builds always use R8 (`optimization { enable = true }` in `app/build.gradle.kts`). Never turn it off: Play Vitals flags it. JSON is parsed by hand with `org.json`, so no keep rules are needed; any new reflection-based code needs keep rules. Before each release, test `releaseTest` on the emulator.
 - `releaseTest` build type = release signed with the debug key, for local installs only. It is excluded from Play publishing (`playConfigs` in `app/build.gradle.kts`).
 - Upload key: `keystore/` (not in SVN). Play service account key: `%USERPROFILE%\.keys\...json`.
 - Release (Gradle Play Publisher):

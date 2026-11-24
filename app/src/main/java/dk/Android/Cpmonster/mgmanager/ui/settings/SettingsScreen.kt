@@ -95,7 +95,7 @@ fun SettingsScreen(
     // Landscape / wide screens: the car (preview, photo, colour) on the left, the rest on the right.
     // One full-width column made the car preview huge.
     BoxWithConstraints(modifier.fillMaxSize()) {
-        val wide = maxWidth >= 600.dp && maxWidth > maxHeight
+        val wide = dk.Android.Cpmonster.mgmanager.ui.components.isWideLayout()
         val appearanceSection: @Composable ColumnScope.() -> Unit = {
             Section("Appearance") {
                 val modes = listOf(ThemeMode.SYSTEM_DEFAULT to "System", ThemeMode.LIGHT to "Light", ThemeMode.DARK to "Dark")

@@ -232,7 +232,7 @@ fun HomeScreen(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Landscape / wide screens: car on the left, suggestion and profiles on the right,
         // each scrolling on its own. One full-width card looked stretched and pushed the profiles off-screen.
-        val wide = maxWidth >= 600.dp && maxWidth > maxHeight
+        val wide = dk.Android.Cpmonster.mgmanager.ui.components.isWideLayout()
         val carPart: @Composable ColumnScope.() -> Unit = {
             if (isDemo) DemoBanner(onExitDemo)
             HeroCard(ui.vehicle, ui.syncing, ui.notice, activeProfile, accent, carColor(ui.carColorOverride, ui.vehicle), rememberCarPhoto(ui.carPhoto), server, onRefresh = { viewModel.refresh() })

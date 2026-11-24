@@ -103,6 +103,9 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
     val carColorOverride by container.settings.carColor.collectAsStateWithLifecycle(null)
     val carPhoto by container.settings.carPhoto.collectAsStateWithLifecycle(null)
     val showTestServer = dk.Android.Cpmonster.mgmanager.DevOnly.ENABLED // DEV-ONLY
+    val serverState by dk.Android.Cpmonster.mgmanager.saic.ServerStatus.state.collectAsStateWithLifecycle()
+    // The front page has its own status ring next to the car; other screens get the top-bar icon.
+    val serverDown = serverState.health == dk.Android.Cpmonster.mgmanager.saic.ServerHealth.DOWN && !auth.isDemo
     val appVersion = remember {
         runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""
     }
@@ -165,6 +168,7 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
                     }
                 },
                 logoutLabel = if (auth.isDemo) "Exit demo" else "Log out",
+                serverDown = serverDown && currentScreen != Screen.Main,
             )
         },
     ) { innerPadding ->

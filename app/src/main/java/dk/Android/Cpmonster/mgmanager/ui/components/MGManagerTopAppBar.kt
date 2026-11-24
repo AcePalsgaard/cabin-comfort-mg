@@ -3,11 +3,15 @@ package dk.Android.Cpmonster.mgmanager.ui.components
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PrivacyTip
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -38,8 +42,27 @@ fun MGManagerTopAppBar(
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
     logoutLabel: String = "Log out",
+    /** MG's servers aren't answering. Shows a small cloud-off icon; tap it for an explanation. */
+    serverDown: Boolean = false,
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    var explainServer by remember { mutableStateOf(false) }
+
+    if (explainServer) {
+        AlertDialog(
+            onDismissRequest = { explainServer = false },
+            icon = { Icon(Icons.Rounded.CloudOff, null) },
+            title = { Text("MG isn't responding") },
+            text = {
+                Text(
+                    "MG's servers (or your connection) aren't answering right now. " +
+                        "You can still use the app – we keep trying in the background " +
+                        "and send your commands as soon as MG is back."
+                )
+            },
+            confirmButton = { TextButton(onClick = { explainServer = false }) { Text("OK") } },
+        )
+    }
     val uriHandler = LocalUriHandler.current
 
     TopAppBar(
@@ -53,6 +76,11 @@ fun MGManagerTopAppBar(
             }
         },
         actions = {
+            if (serverDown) {
+                IconButton(onClick = { explainServer = true }) {
+                    Icon(Icons.Rounded.CloudOff, contentDescription = "MG servers not responding", tint = MaterialTheme.colorScheme.error)
+                }
+            }
             IconButton(onClick = { showMenu = true }) {
                 Icon(Icons.Rounded.MoreVert, contentDescription = "Menu")
             }

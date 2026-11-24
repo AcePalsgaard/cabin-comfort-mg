@@ -149,7 +149,7 @@ class SaicApi(
                 return unwrap(env, eventId)
             } catch (p: EventPending) {
                 eventId = p.eventId
-                if (System.currentTimeMillis() > deadline) throw SaicNetworkException("The car did not answer in time")
+                if (System.currentTimeMillis() > deadline) throw SaicNetworkException("The car did not answer in time", serverDown = false)
                 delay(pollDelayMs)
             }
         }
@@ -208,12 +208,40 @@ class SaicApi(
             rb.get().header("Content-Type", "$ct;charset=utf-8")
         }
 
+        val probe = ServerStatus.begin()
         val response = try {
             http.newCall(rb.build()).execute()
         } catch (e: IOException) {
+            ServerStatus.end(probe, ok = false, offline = isPhoneOffline(e))
             throw SaicNetworkException("Network error: ${e.message}", e)
         }
-        response.use { r ->
+        val envelope = try {
+            parse(response)
+        } catch (e: SaicNetworkException) {
+            ServerStatus.end(probe, ok = false)
+            throw e
+        } catch (e: Exception) {
+            // A real answer (auth error etc.): the server is up.
+            ServerStatus.end(probe, ok = true)
+            throw e
+        }
+        ServerStatus.end(probe, ok = true)
+        envelope
+    }
+
+    /**
+     * The request never left the phone: no network, or the name lookup failed
+     * (no internet, or a home DNS filter). Timeouts and refused connections are MG's side.
+     */
+    private fun isPhoneOffline(e: IOException): Boolean =
+        generateSequence<Throwable>(e) { it.cause }.take(5).any {
+            it is java.net.UnknownHostException ||
+                it is java.net.NoRouteToHostException ||
+                it.message.orEmpty().let { m -> "ENETUNREACH" in m || "Network is unreachable" in m }
+        }
+
+    private fun parse(response: okhttp3.Response): Envelope {
+        return response.use { r ->
             val raw = try {
                 r.body.string().trim()
             } catch (e: IOException) {

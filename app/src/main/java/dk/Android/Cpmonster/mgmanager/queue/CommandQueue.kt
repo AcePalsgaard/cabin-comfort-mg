@@ -16,6 +16,7 @@ import dk.Android.Cpmonster.mgmanager.saic.NeedsLoginException
 import dk.Android.Cpmonster.mgmanager.saic.SaicAuthException
 import dk.Android.Cpmonster.mgmanager.saic.SaicCommands
 import dk.Android.Cpmonster.mgmanager.saic.SaicIncompleteDataException
+import dk.Android.Cpmonster.mgmanager.saic.SaicNetworkException
 import dk.Android.Cpmonster.mgmanager.work.QueueWorker
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -74,6 +75,12 @@ class CommandQueue(
 
     suspend fun clear() = dao.clear()
 
+    /** MG's servers answer again: stop waiting out the backoff. */
+    suspend fun retryNow() {
+        dao.runAllNow(System.currentTimeMillis())
+        kick()
+    }
+
     suspend fun drain() {
         if (!mutex.tryLock()) return
         try {
@@ -104,6 +111,8 @@ class CommandQueue(
                     } else {
                         retryLater(job, type, e, immediate = false)
                     }
+                } catch (e: SaicNetworkException) {
+                    if (e.serverDown) serverDown(job, type, e) else retryLater(job, type, e, immediate = false)
                 } catch (e: Exception) {
                     retryLater(job, type, e, immediate = false)
                 }
@@ -123,6 +132,18 @@ class CommandQueue(
         }
         val backoff = if (immediate) 1_000L else min(5_000L shl min(job.attempts, 6), 5 * 60_000L)
         dao.reschedule(job.id, attempts, System.currentTimeMillis() + backoff, e.message)
+    }
+
+    /**
+     * MG's servers aren't answering. That's not this job's fault, so status refreshes keep
+     * trying (about once a minute, until they expire) instead of using up their attempts.
+     * Commands still give up after their normal number of tries.
+     */
+    private suspend fun serverDown(job: ApiJob, type: JobType, e: Exception) {
+        if (type != JobType.REFRESH_STATUS) return retryLater(job, type, e, immediate = false)
+        Log.w(TAG, "${job.type}: MG servers not responding (${e.message})")
+        val backoff = min(5_000L shl min(job.attempts, 4), SERVER_DOWN_RETRY_MS)
+        dao.reschedule(job.id, job.attempts + 1, System.currentTimeMillis() + backoff, e.message)
     }
 
     private suspend fun drop(job: ApiJob, type: JobType?, reason: String?) {
@@ -181,5 +202,7 @@ class CommandQueue(
         private const val TAG = "CommandQueue"
         /** ~8 tries over roughly 10 minutes (5 s, 10 s, 20 s … backoff). */
         private const val INCOMPLETE_MAX_ATTEMPTS = 8
+        /** How often we knock on MG's door while their servers are down. */
+        private const val SERVER_DOWN_RETRY_MS = 60_000L
     }
 }

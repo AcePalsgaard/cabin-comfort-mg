@@ -100,7 +100,12 @@ class LoginViewModel(private val c: AppContainer) : ViewModel() {
                     username = s.username.orEmpty(),
                     isEmail = s.isEmail,
                     countryCode = s.countryCode ?: it.countryCode,
-                    error = if (s.needsLogin) "Please log in again" else null,
+                    error = when {
+                        // Logged in while MG was down; now MG is back and said no.
+                        s.needsLogin && s.unverified -> "MG is back online but didn't accept that login. Please check your username and password."
+                        s.needsLogin -> "Please log in again"
+                        else -> null
+                    },
                 )
             }
         }
@@ -124,7 +129,11 @@ class LoginViewModel(private val c: AppContainer) : ViewModel() {
         // Runs in the app scope: logging in swaps the screen, and that must not cancel the login.
         c.scope.launch {
             val error: String? = try {
-                c.auth.login(s.username, pw, s.isEmail, s.countryCode.takeUnless { s.isEmail })
+                // Returns false when MG's servers don't answer: we let the user in anyway and
+                // check the password in the background once they're back.
+                if (!c.auth.login(s.username, pw, s.isEmail, s.countryCode.takeUnless { s.isEmail })) {
+                    Log.w(TAG, "Login: MG servers not responding, continuing unverified")
+                }
                 null
             } catch (e: CancellationException) {
                 throw e

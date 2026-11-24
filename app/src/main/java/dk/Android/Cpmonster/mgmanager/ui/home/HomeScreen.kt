@@ -32,11 +32,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AcUnit
 import androidx.compose.material.icons.rounded.BatteryStd
-import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.LocalFireDepartment
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Thermostat
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Button
@@ -51,7 +49,13 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,6 +78,8 @@ import dk.Android.Cpmonster.mgmanager.data.db.VehicleState
 import dk.Android.Cpmonster.mgmanager.data.profile.ActiveProfile
 import dk.Android.Cpmonster.mgmanager.data.profile.ProfileSuggester
 import dk.Android.Cpmonster.mgmanager.queue.JobType
+import dk.Android.Cpmonster.mgmanager.saic.ServerSnapshot
+import dk.Android.Cpmonster.mgmanager.saic.ServerStatus
 import dk.Android.Cpmonster.mgmanager.data.model.CarColor
 import dk.Android.Cpmonster.mgmanager.ui.car.BodyStyle
 import dk.Android.Cpmonster.mgmanager.ui.car.CarSilhouette
@@ -143,8 +149,18 @@ class HomeViewModel(private val c: AppContainer) : ViewModel() {
     }
 
     fun refresh() = viewModelScope.launch { c.queue.enqueue(JobType.REFRESH_STATUS) }
+
+    /**
+     * How MG's servers are doing, for the status ring. Null in demo mode (nothing is sent).
+     * Read here rather than passed in: NavDisplay keeps a screen's content per key, so
+     * parameters from outside wouldn't update.
+     */
+    val server: StateFlow<ServerSnapshot?> = combine(ServerStatus.state, c.auth.state) { s, a ->
+        if (a.isDemo) null else s
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -154,6 +170,7 @@ fun HomeScreen(
     onExitDemo: () -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val server by viewModel.server.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         // A session may already be running – a status refresh re-posts its notification.
@@ -168,8 +185,25 @@ fun HomeScreen(
     val activeProfile = ui.profiles.firstOrNull { it.id == ui.activeId }
     val accent = (activeProfile ?: ui.suggestion)?.kind?.color() ?: MaterialTheme.colorScheme.primary
 
+    // Pull down to refresh. The pull spinner only shows briefly to confirm the gesture;
+    // the status ring next to the car then shows how the request is going.
+    var pulled by remember { mutableStateOf(false) }
+    LaunchedEffect(pulled) {
+        if (pulled) {
+            delay(900)
+            pulled = false
+        }
+    }
+    PullToRefreshBox(
+        isRefreshing = pulled,
+        onRefresh = {
+            pulled = true
+            viewModel.refresh()
+        },
+        modifier = modifier.fillMaxSize(),
+    ) {
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -177,7 +211,7 @@ fun HomeScreen(
     ) {
         if (isDemo) DemoBanner(onExitDemo)
 
-        HeroCard(ui.vehicle, ui.syncing, ui.notice, activeProfile, accent, carColor(ui.carColorOverride, ui.vehicle), rememberCarPhoto(ui.carPhoto), onRefresh = { viewModel.refresh() })
+        HeroCard(ui.vehicle, ui.syncing, ui.notice, activeProfile, accent, carColor(ui.carColorOverride, ui.vehicle), rememberCarPhoto(ui.carPhoto), server, onRefresh = { viewModel.refresh() })
 
         AnimatedVisibility(visible = ui.suggestion != null) {
             ui.suggestion?.let { s ->
@@ -215,6 +249,7 @@ fun HomeScreen(
         }
         Spacer(Modifier.height(8.dp))
     }
+    }
 }
 
 @Composable
@@ -244,6 +279,7 @@ private fun HeroCard(
     accent: Color,
     paint: CarColor,
     photo: ImageBitmap?,
+    server: ServerSnapshot?,
     onRefresh: () -> Unit,
 ) {
     val tint by animateColorAsState(accent, label = "hero")
@@ -290,6 +326,7 @@ private fun HeroCard(
                     Icon(Icons.Rounded.DirectionsCar, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
                 }
                 Spacer(Modifier.width(12.dp))
+                val shown = rememberShownServerState(server, syncing)
                 Column(Modifier.weight(1f)) {
                     Text(v?.model ?: "Your MG", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                     val sub = when {
@@ -304,12 +341,16 @@ private fun HeroCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    AnimatedVisibility(visible = shown.message != null) {
+                        Text(
+                            shown.message.orEmpty(),
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = shown.health.statusColor(MaterialTheme.colorScheme.onSurfaceVariant),
+                        )
+                    }
                 }
-                if (syncing) {
-                    Icon(Icons.Rounded.CloudSync, "Syncing", tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    IconButton(onClick = onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh") }
-                }
+                ServerStatusRing(shown, onRefresh = onRefresh)
             }
 
             Spacer(Modifier.height(18.dp))

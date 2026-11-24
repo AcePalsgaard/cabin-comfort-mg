@@ -35,6 +35,11 @@ data class AuthState(
     val needsLogin: Boolean = false,
     /** Guest/demo mode: no account, nothing is ever sent to MG. */
     val isDemo: Boolean = false,
+    /**
+     * Logged in while MG's servers were down: the password hasn't been checked yet.
+     * The background queue checks it as soon as the servers answer.
+     */
+    val unverified: Boolean = false,
 ) {
     val isLoggedIn get() = isDemo || (hasCredentials && !needsLogin)
 }
@@ -67,6 +72,7 @@ class AuthRepository(
         val TOKEN_EXPIRY = longPreferencesKey("token_expiry")
         val NEEDS_LOGIN = booleanPreferencesKey("needs_login")
         val DEMO = booleanPreferencesKey("demo")
+        val UNVERIFIED = booleanPreferencesKey("unverified")
     }
 
     val state: Flow<AuthState> = store.data.map { it.toState() }
@@ -93,14 +99,24 @@ class AuthRepository(
         hasCredentials = this[K.USERNAME] != null && this[K.PASSWORD] != null,
         needsLogin = this[K.NEEDS_LOGIN] ?: false,
         isDemo = this[K.DEMO] ?: false,
+        unverified = this[K.UNVERIFIED] ?: false,
     )
 
-    /** User-initiated login. Retries network hiccups quietly, throws on bad credentials. */
-    suspend fun login(username: String, password: String, isEmail: Boolean, countryCode: String?) {
+    /**
+     * User-initiated login. Retries network hiccups quietly, throws on bad credentials.
+     * If MG's servers don't answer at all, the login is accepted for now (returns false) so the
+     * user can use the app; the queue checks the password when the servers are back.
+     */
+    suspend fun login(username: String, password: String, isEmail: Boolean, countryCode: String?): Boolean {
         val region = state.first().region
         val hash = SaicCrypto.sha1Hex(password)
         val api = SaicApi(http, region)
-        val result = retryNetwork { api.login(username.trim(), hash, isEmail, countryCode) }
+        val result = try {
+            retryNetwork(attempts = 2) { api.login(username.trim(), hash, isEmail, countryCode) }
+        } catch (e: SaicNetworkException) {
+            if (!e.serverDown) throw e
+            null
+        }
         lock.withLock {
             store.edit {
                 it[K.USERNAME] = username.trim()
@@ -109,10 +125,16 @@ class AuthRepository(
                 it[K.PASSWORD] = cipher.encrypt(hash)
                 it[K.NEEDS_LOGIN] = false
                 it.remove(K.DEMO)
+                if (result == null) it[K.UNVERIFIED] = true else it.remove(K.UNVERIFIED)
+                it.remove(K.TOKEN)
+                it.remove(K.TOKEN_EXPIRY)
             }
-            saveToken(api, result)
+            cachedApi = null
+            cachedExpiry = 0L
+            if (result != null) saveToken(api, result)
         }
-        settings.setAuthSession(AuthSession(isLoggedIn = true, username = result.userName ?: username.trim()))
+        settings.setAuthSession(AuthSession(isLoggedIn = true, username = result?.userName ?: username.trim()))
+        return result != null
     }
 
     /** API client with a valid token. Re-logs in silently when needed. */
@@ -147,6 +169,7 @@ class AuthRepository(
             markNeedsLogin()
             throw NeedsLoginException()
         }
+        if (s.unverified) store.edit { it.remove(K.UNVERIFIED) }
         saveToken(api, result)
         api
     }
@@ -192,9 +215,9 @@ class AuthRepository(
         store.edit { it[K.NEEDS_LOGIN] = true }
     }
 
-    private suspend fun <T> retryNetwork(block: suspend () -> T): T {
+    private suspend fun <T> retryNetwork(attempts: Int = 4, block: suspend () -> T): T {
         var wait = 1_000L
-        repeat(3) {
+        repeat(attempts - 1) {
             try {
                 return block()
             } catch (e: SaicNetworkException) {

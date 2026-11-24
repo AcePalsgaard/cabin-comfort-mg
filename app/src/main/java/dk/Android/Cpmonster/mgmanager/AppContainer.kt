@@ -63,11 +63,41 @@ class AppContainer(private val context: Context) {
             queue.kick()
         }
         StatusPollWorker.schedule(context)
+        watchConnectivity()
+        // MG's servers back after an outage: send what's waiting right away.
+        scope.launch {
+            var wasDown = false
+            dk.Android.Cpmonster.mgmanager.saic.ServerStatus.state.collect { s ->
+                val h = s.health
+                val failed = h == dk.Android.Cpmonster.mgmanager.saic.ServerHealth.DOWN ||
+                    h == dk.Android.Cpmonster.mgmanager.saic.ServerHealth.OFFLINE
+                if (!failed && h != dk.Android.Cpmonster.mgmanager.saic.ServerHealth.UNKNOWN && wasDown) queue.retryNow()
+                wasDown = failed
+            }
+        }
         // Home screen widgets follow the active profile, profile names and outside temp.
         scope.launch {
             dk.Android.Cpmonster.mgmanager.widget.Widgets.snapshots(this@AppContainer)
                 .collect { dk.Android.Cpmonster.mgmanager.widget.Widgets.render(context, it) }
         }
+    }
+
+    /** Tells ServerStatus whether the phone is online, and retries at once when it comes back. */
+    private fun watchConnectivity() {
+        val cm = context.getSystemService(android.net.ConnectivityManager::class.java) ?: return
+        fun online(n: android.net.Network?) = n != null && cm.getNetworkCapabilities(n)
+            ?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        dk.Android.Cpmonster.mgmanager.saic.ServerStatus.setPhoneOnline(online(cm.activeNetwork))
+        cm.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                val wasOffline = !dk.Android.Cpmonster.mgmanager.saic.ServerStatus.state.value.phoneOnline
+                dk.Android.Cpmonster.mgmanager.saic.ServerStatus.setPhoneOnline(true)
+                if (wasOffline) scope.launch { queue.retryNow() }
+            }
+            override fun onLost(network: android.net.Network) {
+                dk.Android.Cpmonster.mgmanager.saic.ServerStatus.setPhoneOnline(false)
+            }
+        })
     }
 
     suspend fun onLoggedIn() {
@@ -81,6 +111,7 @@ class AppContainer(private val context: Context) {
         vehicle.clear()
         demoCar.reset()
         auth.startDemo()
+        dk.Android.Cpmonster.mgmanager.saic.ServerStatus.reset()
         queue.enqueue(JobType.REFRESH_STATUS)
     }
 
@@ -99,6 +130,7 @@ class AppContainer(private val context: Context) {
         dk.Android.Cpmonster.mgmanager.climate.ClimateSession.clearAll(context)
         vehicle.clear()
         demoCar.reset()
+        dk.Android.Cpmonster.mgmanager.saic.ServerStatus.reset()
     }
 }
 

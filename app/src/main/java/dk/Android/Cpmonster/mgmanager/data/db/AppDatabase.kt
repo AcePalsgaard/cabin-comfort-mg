@@ -54,6 +54,10 @@ abstract class JobDao {
     @Query("UPDATE jobs SET attempts = :attempts, nextRunAt = :nextRunAt, lastError = :error WHERE id = :id")
     abstract suspend fun reschedule(id: Long, attempts: Int, nextRunAt: Long, error: String?)
 
+    /** MG's servers came back: run everything that was waiting on backoff now. */
+    @Query("UPDATE jobs SET nextRunAt = :now WHERE nextRunAt > :now")
+    abstract suspend fun runAllNow(now: Long)
+
     @Query("DELETE FROM jobs WHERE id = :id")
     abstract suspend fun delete(id: Long)
 

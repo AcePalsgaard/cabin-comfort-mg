@@ -59,8 +59,10 @@ class SaicCryptoTest {
         assertArrayEquals(byteArrayOf(8), c.params[1].value)
 
         val stop = SaicCommands.stopClimate()
-        assertEquals(listOf(19, 20, 22, 255), stop.params.map { it.id })
+        // Python stop_ac: fan 0 forces temperature_idx = 8, so no TEMPERATURE param is sent.
+        assertEquals(listOf(19, 22, 255), stop.params.map { it.id })
         assertArrayEquals(byteArrayOf(0), stop.params[0].value)
+        assertArrayEquals(byteArrayOf(0), stop.params[1].value)
     }
 
     @Test

@@ -2,26 +2,36 @@ No more digging through menus every frosty morning.
 
 Cabin Comfort for MG lets you save your perfect cabin as a profile – and start everything with a single tap: cabin heat, defrost, heated seats, steering wheel and rear window, all at once.
 
-★ ENVIRONMENT PROFILES
+★ COMFORT PROFILES
 • "Warm up" for cold mornings: cabin heat, windscreen defrost, seat heating, heated steering wheel and rear window – in one tap
 • "Chill" for hot days: cool the cabin before you get in
 • Edit each profile once and forget about it: temperature, fan speed, defrost, seat levels for driver and passenger, steering wheel, rear window
-• Switch profiles straight from the home screen
+• Switch profiles straight from the front page
+
+★ HOME SCREEN WIDGETS
+• Auto button: one tap starts the profile that fits the outside temperature, tap again to stop
+• Profile widget: your Warm up and Chill profiles side by side
+• Both show which profile is running
 
 ★ RUNS LONGER THAN ONE CYCLE
-Your MG stops the climate on its own after about 10 minutes. Cabin Comfort for MG can keep it going for up to 4 runs in a row (around 40 minutes) and restarts each run automatically. A minute before the last run ends, you're asked whether to continue.
+Your MG stops the A/C on its own after about 10 minutes. Cabin Comfort for MG can keep it going for up to 4 runs in a row (around 40 minutes) and restarts each run automatically. A minute before the last run ends, you're asked whether to continue.
 
 ★ ONE TAP, NO MENUS
-Instead of turning on climate, then seats, then the wheel, then the rear window one by one, you just tap your profile. Done.
+Instead of turning on the A/C, then seats, then the wheel, then the rear window one by one, you just tap your profile. Done.
 
 ★ SMART SUGGESTIONS
 The app checks the outside temperature and suggests the profile that fits. Nothing starts until you say so.
 
 ★ RELIABLE IN THE BACKGROUND
-MG's servers don't always answer the first time. Every command is queued and quietly retried, so you don't have to keep tapping. A notification shows progress while the car is being heated or cooled.
+MG's servers don't always answer the first time. Every command is queued and quietly retried, so you don't have to keep tapping – even if MG's servers are down for a while. A notification shows progress while the car is being heated or cooled.
 
-★ CAR STATUS AT A GLANCE
-Outside and cabin temperature and battery level when you open the app.
+★ YOUR CAR AT A GLANCE
+• Outside and cabin temperature and battery level when you open the app
+• A drawing of your car in its own colour – or use your own photo
+• Works in portrait and landscape
+
+★ TRY IT FIRST
+Demo mode lets you look around with a pretend car, no account needed. Nothing is sent anywhere.
 
 ★ PRIVATE BY DESIGN
 • No ads, no analytics, no servers of our own

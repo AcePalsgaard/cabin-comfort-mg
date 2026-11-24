@@ -8,20 +8,30 @@ Med Cabin Comfort for MG gemmer du din perfekte kabine som en profil – og star
 • Indstil hver profil én gang: temperatur, blæser, afrimning, sædevarme til fører og passager, rat og bagrude
 • Skift profil direkte fra forsiden
 
+★ WIDGETS TIL STARTSKÆRMEN
+• Auto-knap: ét tryk starter den profil, der passer til udetemperaturen – tryk igen for at stoppe
+• Profil-widget: dine Warm up- og Chill-profiler side om side
+• Begge viser, hvilken profil der kører
+
 ★ KØRER LÆNGERE END ÉN CYKLUS
-Din MG slukker selv klimaanlægget efter ca. 10 minutter. Cabin Comfort for MG kan holde det kørende i op til 4 omgange i træk (ca. 40 minutter) og genstarter automatisk. Et minut før sidste omgang slutter, bliver du spurgt, om den skal fortsætte.
+Din MG slukker selv for A/C efter ca. 10 minutter. Cabin Comfort for MG kan holde den kørende i op til 4 omgange i træk (ca. 40 minutter) og genstarter automatisk. Et minut før sidste omgang slutter, bliver du spurgt, om den skal fortsætte.
 
 ★ ÉT TRYK, INGEN MENUER
-I stedet for at tænde klima, så sæder, så rat og så bagrude hver for sig, trykker du bare på din profil. Færdig.
+I stedet for at tænde A/C, så sæder, så rat og så bagrude hver for sig, trykker du bare på din profil. Færdig.
 
 ★ SMARTE FORSLAG
 Appen ser på udetemperaturen og foreslår den profil, der passer. Intet starter, før du siger ja.
 
 ★ PÅLIDELIG I BAGGRUNDEN
-MG's servere svarer ikke altid i første forsøg. Alle kommandoer sættes i kø og prøves igen automatisk, så du ikke skal blive ved med at trykke. En notifikation viser fremskridtet, mens bilen varmes op eller køles ned.
+MG's servere svarer ikke altid i første forsøg. Alle kommandoer sættes i kø og prøves igen automatisk, så du ikke skal blive ved med at trykke – også hvis MG's servere er nede et stykke tid. En notifikation viser fremskridtet, mens bilen varmes op eller køles ned.
 
-★ BILENS STATUS MED ÉT BLIK
-Ude- og kabinetemperatur samt batteriniveau, når du åbner appen.
+★ DIN BIL MED ÉT BLIK
+• Ude- og kabinetemperatur samt batteriniveau, når du åbner appen
+• En tegning af din bil i dens egen farve – eller brug dit eget billede
+• Virker på højkant og på langs
+
+★ PRØV DEN FØRST
+I demo-tilstand kan du se dig omkring med en lege-bil, uden konto. Intet sendes nogen steder hen.
 
 ★ PRIVATLIV FØRST
 • Ingen reklamer, ingen analyse, ingen egne servere

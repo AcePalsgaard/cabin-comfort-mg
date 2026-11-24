@@ -1,5 +1,8 @@
-What's new in 1.1:
-• Home screen widgets: an Auto button, and one with your two profiles. Both show which profile is running
-• A drawing of your car on the front page, in your car's colour
-• Use your own photo of your car (Settings › Your car)
-• Pick the car colour yourself if it isn't detected
+First release of Cabin Comfort for MG:
+• Warm up and Chill profiles: heat, defrost, seats, wheel and rear window in one tap
+• Keeps the A/C going for up to 4 runs (about 40 min)
+• Suggests a profile from the outside temperature
+• Home screen widgets: Auto button and your two profiles
+• Your car drawn in its own colour, or use your own photo
+• Commands are retried in the background when MG's servers are slow or down
+• Demo mode: try it without an account

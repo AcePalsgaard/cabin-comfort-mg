@@ -1,0 +1,8 @@
+Første udgave af Cabin Comfort for MG:
+• Warm up- og Chill-profiler: varme, afrimning, sæder, rat og bagrude med ét tryk
+• Holder A/C kørende i op til 4 omgange (ca. 40 min)
+• Foreslår en profil ud fra udetemperaturen
+• Widgets til startskærmen: Auto-knap og dine to profiler
+• Din bil tegnet i dens egen farve, eller brug dit eget billede
+• Kommandoer prøves igen i baggrunden, når MG's servere er langsomme eller nede
+• Demo-tilstand: prøv appen uden konto

@@ -1,5 +1,8 @@
-Nyt i 1.1:
-• Widgets til startskærmen: en Auto-knap og en med dine to profiler. Begge viser, hvilken profil der kører
-• En tegning af din bil på forsiden i bilens farve
-• Brug dit eget billede af bilen (Settings › Your car)
-• Vælg selv bilens farve, hvis den ikke bliver fundet
+Første udgave af Cabin Comfort for MG:
+• Warm up- og Chill-profiler: varme, afrimning, sæder, rat og bagrude med ét tryk
+• Holder A/C kørende i op til 4 omgange (ca. 40 min)
+• Foreslår en profil ud fra udetemperaturen
+• Widgets til startskærmen: Auto-knap og dine to profiler
+• Din bil tegnet i dens egen farve, eller brug dit eget billede
+• Kommandoer prøves igen i baggrunden, når MG's servere er langsomme eller nede
+• Demo-tilstand: prøv appen uden konto

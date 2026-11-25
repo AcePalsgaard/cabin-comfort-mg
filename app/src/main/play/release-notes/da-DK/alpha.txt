@@ -1,6 +1,5 @@
-Nyt i 1.4:
-• Kommandoer kommer mere sikkert frem til bilen, og appen sender ikke længere en strøm af nye forsøg
-• Hvis bilen afviser fjernbetjening, fortæller appen hvorfor, og hvad du skal gøre
-• Varmen vises som tændt, så snart bilen bekræfter den; sæder og andet ekstra følger efter i baggrunden
-• Tydeligere besked, når MG ikke godtager dit login
-• Færre logins hos MG i baggrunden
+Nyt i 1.5:
+• Tidsplan: start varme eller køl på faste tidspunkter – ét tidspunkt for hverdage og ét for weekend, eller et for hver dag
+• Forsiden viser, hvornår næste planlagte start er
+• Omgår MG4'ere, der ikke vil varme eller køle, når ladekablet sidder i, men bilen ikke lader (kan slås fra pr. profil)
+• Ingen MG-konto endnu? Link til MG iSMART-appen, hvor du opretter en

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PrivacyTip
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -52,6 +53,8 @@ fun MGManagerSideBar(
     onSettings: () -> Unit,
     onAboutScreen: Boolean,
     onAbout: () -> Unit,
+    showScheduleItem: Boolean,
+    onSchedule: () -> Unit,
     isLoggedIn: Boolean,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
@@ -96,6 +99,16 @@ fun MGManagerSideBar(
                     Icon(Icons.Rounded.MoreVert, contentDescription = "Menu")
                 }
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    if (showScheduleItem) {
+                        DropdownMenuItem(
+                            text = { Text("Schedule") },
+                            leadingIcon = { Icon(Icons.Rounded.Schedule, null) },
+                            onClick = {
+                                showMenu = false
+                                onSchedule()
+                            },
+                        )
+                    }
                     if (!onSettingsScreen) {
                         DropdownMenuItem(
                             text = { Text("Settings") },

@@ -46,6 +46,7 @@ class ProfileController(
         ClimateSession.clearAll(context)
         queue.enqueue(JobType.CLIMATE, JSONObject().put("stop", true))
         if (current != null) stopExtras(current, keep = null)
+        queue.enqueueRestore()
         queue.enqueue(JobType.REFRESH_STATUS)
     }
 
@@ -111,6 +112,7 @@ class ProfileController(
         profiles.clearActive()
         ClimateSession.cancelAlarms(context)
         if (p != null) ClimateSession.showFinished(context, p) else ClimateSession.clearAll(context)
+        queue.enqueueRestore()
         queue.enqueue(JobType.REFRESH_STATUS)
     }
 
@@ -123,7 +125,9 @@ class ProfileController(
 
     private suspend fun apply(profile: Profile) {
         val car = vehicle.current()?.features ?: CarFeatures(null)
-        val climate = JSONObject().put("tempIdx", car.temperatureIdx(profile.targetTemp))
+        val climate = JSONObject()
+            .put("tempIdx", car.temperatureIdx(profile.targetTemp))
+            .put("chargeAssist", profile.chargeAssist)
         when {
             profile.kind == ProfileKind.COLD && profile.frontDefrost -> climate.put("fan", 5).put("ac", true)
             profile.kind == ProfileKind.WARM -> climate.put("fan", profile.fanSpeed).put("ac", true)

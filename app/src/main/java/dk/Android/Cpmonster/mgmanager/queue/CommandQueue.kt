@@ -43,7 +43,9 @@ enum class JobType(val maxAgeMs: Long, val maxAttempts: Int) {
     CLIMATE(20 * 60_000L, 4),
     SEATS(20 * 60_000L, 4),
     STEERING_WHEEL(20 * 60_000L, 4),
-    REAR_WINDOW(20 * 60_000L, 4);
+    REAR_WINDOW(20 * 60_000L, 4),
+    /** Put back the charge limit / stop the charge [ChargeAssist] started for the A/C. */
+    CHARGE_RESTORE(6 * 60 * 60_000L, 6);
 
     val isCommand get() = this != REFRESH_STATUS
 }
@@ -63,6 +65,7 @@ class CommandQueue(
     /** The car blocks remote commands: end the running session so it doesn't send more. */
     private val onCarBlocked: suspend () -> Unit,
     private val demo: dk.Android.Cpmonster.mgmanager.demo.DemoCar,
+    private val chargeAssist: ChargeAssist,
 ) {
     private val mutex = Mutex()
     private var timer: Job? = null
@@ -205,7 +208,11 @@ class CommandQueue(
     private suspend fun drop(job: ApiJob, type: JobType?, reason: String?) {
         Log.w(TAG, "Dropping ${job.type}: $reason")
         dao.delete(job.id)
-        if (type != null && type != JobType.REFRESH_STATUS) _lastDropped.value = "Couldn't reach the car"
+        _lastDropped.value = when (type) {
+            null, JobType.REFRESH_STATUS -> return
+            JobType.CHARGE_RESTORE -> "Couldn't set the charge limit back – check it in the car"
+            else -> "Couldn't reach the car"
+        }
     }
 
     private suspend fun scheduleNext() {
@@ -249,9 +256,52 @@ class CommandQueue(
             JobType.SEATS -> SaicCommands.heatedSeats(p.getInt("left"), p.getInt("right"))
             JobType.STEERING_WHEEL -> SaicCommands.steeringWheel(p.getBoolean("on"))
             JobType.REAR_WINDOW -> SaicCommands.rearWindow(p.getBoolean("on"))
+            JobType.CHARGE_RESTORE -> return chargeAssist.restore(api, vin)
             JobType.REFRESH_STATUS -> error("unreachable")
         }
-        api.control(vin, command)
+        if (type == JobType.CLIMATE && !p.optBoolean("stop")) {
+            startClimate(api, vin, command, allowCharge = p.optBoolean("chargeAssist", true))
+        } else {
+            api.control(vin, command)
+        }
+    }
+
+    /**
+     * Heating/A/C start. If the car refuses it while plugged in but not charging (a known MG4
+     * fault), start a charge so the car powers the A/C, then send it once more – if the profile allows it.
+     */
+    private suspend fun startClimate(
+        api: SaicApi,
+        vin: String,
+        command: dk.Android.Cpmonster.mgmanager.saic.ControlCommand,
+        allowCharge: Boolean,
+    ) {
+        try {
+            api.control(vin, command)
+        } catch (e: SaicApiException) {
+            if (!allowCharge || !chargeAssist.worthTrying(e)) throw e
+            if (!chargeAssist.prepare(api, vin)) {
+                // Tried and it didn't work out: put back what we changed.
+                if (chargeAssist.hasChanges()) enqueueRestore()
+                throw e
+            }
+            Log.i(TAG, "Car is charging now, sending the A/C again")
+            api.control(vin, command)
+        }
+    }
+
+    /** Queue putting the car's charging back as it was (no-op if nothing was changed). */
+    suspend fun enqueueRestore() {
+        if (!chargeAssist.hasChanges()) return
+        val now = System.currentTimeMillis()
+        // Not through enqueue(): that would clear a "couldn't reach the car" notice.
+        dao.replace(
+            ApiJob(
+                type = JobType.CHARGE_RESTORE.name, payload = "{}", dedupeKey = JobType.CHARGE_RESTORE.name,
+                createdAt = now, nextRunAt = now,
+            ),
+        )
+        kick()
     }
 
     companion object {

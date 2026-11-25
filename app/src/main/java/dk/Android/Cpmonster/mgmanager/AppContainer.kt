@@ -38,6 +38,7 @@ class AppContainer(private val context: Context) {
     val vehicle = VehicleRepository(db.vehicle())
     val profiles = ProfileRepository(context, db.profiles())
     private val demoCar = dk.Android.Cpmonster.mgmanager.demo.DemoCar(vehicle)
+    val chargeAssist = dk.Android.Cpmonster.mgmanager.queue.ChargeAssist(context.dataStore)
 
     val queue: CommandQueue = CommandQueue(
         context = context,
@@ -48,9 +49,12 @@ class AppContainer(private val context: Context) {
         afterRefresh = { controller.reconcile(it) },
         onCarBlocked = { controller.abort() },
         demo = demoCar,
+        chargeAssist = chargeAssist,
     )
 
     val controller = ProfileController(context, profiles, vehicle, queue)
+
+    val scheduler = dk.Android.Cpmonster.mgmanager.schedule.Scheduler(context, context.dataStore, profiles, vehicle, auth, controller)
 
     /** Called once at startup: everything here runs in the background. */
     fun onAppStart() {
@@ -58,6 +62,8 @@ class AppContainer(private val context: Context) {
         scope.launch {
             profiles.seedDefaults()
             controller.resume()
+            // Alarms are lost on reboot and app updates.
+            scheduler.rearm()
             if (auth.isLoggedIn()) {
                 queue.enqueue(JobType.REFRESH_STATUS)
             }

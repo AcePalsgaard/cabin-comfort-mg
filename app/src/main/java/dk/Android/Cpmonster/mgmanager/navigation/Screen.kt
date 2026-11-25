@@ -17,5 +17,8 @@ sealed interface Screen : NavKey {
     data object About : Screen
 
     @Serializable
+    data object Schedule : Screen
+
+    @Serializable
     data class ProfileEdit(val id: Long) : Screen
 }

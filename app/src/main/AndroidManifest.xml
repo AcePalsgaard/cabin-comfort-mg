@@ -42,6 +42,17 @@
         </receiver>
 
         <receiver
+            android:name=".schedule.ScheduleReceiver"
+            android:exported="false">
+            <!-- The alarm itself, plus re-arming when the clock or permission changes. -->
+            <intent-filter>
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".widget.AutoWidget"
             android:exported="false"
             android:label="@string/widget_auto_label">

@@ -51,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -337,6 +338,20 @@ fun LoginScreen(viewModel: LoginViewModel, modifier: Modifier = Modifier) {
                 } else {
                     Text("Log in")
                 }
+            }
+
+            // MG accounts can only be made in MG's own app; we just point the way.
+            val uriHandler = LocalUriHandler.current
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    "No MG account? Create one in the official MG iSMART app, then log in here.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                TextButton(onClick = {
+                    runCatching { uriHandler.openUri("https://play.google.com/store/search?q=MG%20iSMART&c=apps") }
+                }) { Text("Get MG iSMART") }
             }
 
             OutlinedButton(

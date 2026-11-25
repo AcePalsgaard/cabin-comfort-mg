@@ -99,10 +99,41 @@ class SaicApi(
         parseStatus(callWithEventId("GET", "vehicle/status", statusQuery(vin)))
 
     /** Battery state of charge in percent, or null if the car doesn't report it. */
-    suspend fun batterySoc(vin: String): Double? {
+    suspend fun batterySoc(vin: String): Double? = chargeState(vin).soc
+
+    /** Plugged in, charging, battery level and charge limit (one call; wakes the car). */
+    suspend fun chargeState(vin: String): ChargeState {
         val data = callWithEventId("GET", "vehicle/charging/mgmtData", listOf("vin" to SaicCrypto.sha256Hex(vin)))
-        val raw = data?.optJSONObject("chrgMgmtData")?.optInt("bmsPackSOCDsp", -1) ?: -1
-        return if (raw in 0..1000) raw / 10.0 else null
+        val m = data?.optJSONObject("chrgMgmtData")
+        val rvs = data?.optJSONObject("rvsChargeStatus")
+        val raw = m?.optInt("bmsPackSOCDsp", -1) ?: -1
+        return ChargeState(
+            plugged = (rvs?.optInt("chargingGunState", 0) ?: 0) != 0,
+            // Same rule as saic-python-client-ng is_bms_charging.
+            charging = (m?.optInt("bmsChrgSts", 0) ?: 0) in CHARGING_STATES,
+            soc = if (raw in 0..1000) raw / 10.0 else null,
+            targetCode = m?.optInt("bmsOnBdChrgTrgtSOCDspCmd", 0)?.takeIf { it in 1..7 },
+        )
+    }
+
+    /** Start or stop charging (port of control_charging). */
+    suspend fun controlCharging(vin: String, start: Boolean) {
+        val body = JSONObject()
+            .put("chrgCtrlReq", if (start) 1 else 2)
+            .put("tboxEleccLckCtrlReq", 0)
+            .put("tboxV2XReq", 0)
+            .put("vin", SaicCrypto.sha256Hex(vin))
+        callWithEventId("POST", "vehicle/charging/control", body = body.toString(), contentType = JSON, pollDelayMs = 2_000)
+    }
+
+    /** Set the charge limit, [code] from [TargetSoc] (port of set_target_battery_soc). */
+    suspend fun setTargetSoc(vin: String, code: Int) {
+        val body = JSONObject()
+            .put("onBdChrgTrgtSOCReq", code)
+            .put("altngChrgCrntReq", 0)
+            .put("tboxV2XSpSOCReq", 0)
+            .put("vin", SaicCrypto.sha256Hex(vin))
+        callWithEventId("POST", "vehicle/charging/setting", body = body.toString(), contentType = JSON, pollDelayMs = 2_000)
     }
 
     suspend fun control(vin: String, command: ControlCommand) {
@@ -308,5 +339,7 @@ class SaicApi(
         const val CODE_CAR_BLOCKED = 8
         /** Codes saic-python-client-ng never retries. */
         val FINAL_CODES = setOf(2, 3, 7)
+        /** bmsChrgSts values that mean "charging". */
+        private val CHARGING_STATES = setOf(1, 3, 10, 12)
     }
 }

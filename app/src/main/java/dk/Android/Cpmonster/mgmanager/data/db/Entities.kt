@@ -25,6 +25,11 @@ data class Profile(
     val rearWindow: Boolean,
     /** How many times in a row the climate is started (the car stops it after ~10 min). 1–4. */
     @ColumnInfo(defaultValue = "2") val runs: Int = 2,
+    /**
+     * Work around cars that refuse heating/A/C while plugged in but not charging:
+     * start a charge first (see ChargeAssist).
+     */
+    @ColumnInfo(defaultValue = "1") val chargeAssist: Boolean = true,
 )
 
 @Entity(tableName = "jobs")

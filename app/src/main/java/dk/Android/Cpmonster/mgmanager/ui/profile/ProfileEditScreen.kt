@@ -157,6 +157,16 @@ fun ProfileEditScreen(viewModel: ProfileEditViewModel, onDone: () -> Unit, modif
             Choice(listOf("1", "2", "3", "4"), runs - 1) { i -> viewModel.edit { it.copy(runs = i + 1) } }
         }
 
+        Section("Plugged in") {
+            SwitchRow(
+                "Work around the charging problem",
+                "Some MG4s won't ${if (profile.kind == ProfileKind.COLD) "heat" else "cool"} while plugged in but not " +
+                    "charging. If that happens, the app starts a charge first – raising the charge limit a step " +
+                    "if the battery is full – and sets everything back when it's done.",
+                profile.chargeAssist,
+            ) { on -> viewModel.edit { it.copy(chargeAssist = on) } }
+        }
+
         Button(
             onClick = { viewModel.save(onDone) },
             modifier = Modifier

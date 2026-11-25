@@ -67,7 +67,16 @@ class Car:
         self.seats = [0, 0]
         self.wheel = False
         self.rear_window = False
+        self.plugged = False
+        self.charging = False
+        self.target_code = 5  # 80 %
+        # Older MG4 software: remote A/C refused while plugged in but not charging.
+        self.old_software = True
         self.last_tick = time.time()
+
+    @property
+    def target_pct(self) -> int:
+        return 30 + self.target_code * 10
 
     def tick(self) -> None:
         """Cabin temperature drifts toward target while climate runs."""
@@ -84,6 +93,11 @@ class Car:
                 self.inside -= 1
             if self.climate_on:
                 self.soc = max(0, self.soc - 1)
+            if self.charging:
+                self.soc = min(1000, self.soc + 3)
+                if self.soc >= self.target_pct * 10:
+                    self.charging = False
+                    log("  car: reached charge limit, charging stopped")
 
     def basic_status(self) -> dict:
         self.tick()
@@ -186,6 +200,8 @@ def make_handler(state: State):
                 ("GET", "/vehicle/status"): self.status_live,
                 ("GET", "/vehicle/charging/mgmtData"): self.mgmt_data,
                 ("POST", "/vehicle/control"): self.control,
+                ("POST", "/vehicle/charging/control"): self.charging_control,
+                ("POST", "/vehicle/charging/setting"): self.charging_setting,
                 ("GET", "/user/timezone"): lambda q, b: self.ok({"timezone": "GMT+01:00"}),
             }
             fn = routes.get((method, sub))
@@ -259,6 +275,9 @@ def make_handler(state: State):
             /mock/expire-tokens           - forget all tokens so the app has to log in again
             /mock/http401-logins?seconds=N - every login gets HTTP 401 (like a blocked account) for N seconds
             /mock/block-car?seconds=N      - commands get code 8 "Too frequent operations" for N seconds
+            /mock/plug?state=idle|charging|off[&soc=80][&target=80] - charging cable (idle = plugged, not charging)
+            /mock/old-software?on=1|0      - 1: A/C refused while plugged in but not charging (default 1)
+            /mock/fail-rate?rate=0.15      - share of calls that fail on purpose
             """
             q = {k: v[0] for k, v in parse_qs(url.query).items()}
             if url.path == "/mock/reject-logins":
@@ -274,6 +293,23 @@ def make_handler(state: State):
                 secs = float(q.get("seconds", "600"))
                 state.block_car_until = time.time() + secs
                 log(f"MOCK: car blocks remote commands for {secs:.0f}s")
+            elif url.path == "/mock/plug":
+                st = q.get("state", "idle")
+                with state.car.lock:
+                    state.car.plugged = st != "off"
+                    state.car.charging = st == "charging"
+                    if "soc" in q:
+                        state.car.soc = int(float(q["soc"]) * 10)
+                    if "target" in q:
+                        state.car.target_code = max(1, min(7, (int(q["target"]) - 30) // 10))
+                    c = state.car
+                    log(f"MOCK: cable {st}, battery {c.soc / 10:.1f}%, limit {c.target_pct}%")
+            elif url.path == "/mock/fail-rate":
+                state.fail_rate = float(q.get("rate", "0.15"))
+                log(f"MOCK: failure rate {state.fail_rate:.0%}")
+            elif url.path == "/mock/old-software":
+                state.car.old_software = q.get("on", "1") == "1"
+                log(f"MOCK: old software (no A/C while plugged in, not charging): {state.car.old_software}")
             elif url.path == "/mock/expire-tokens":
                 state.tokens.clear()
                 log("MOCK: all tokens expired")
@@ -337,10 +373,47 @@ def make_handler(state: State):
             if not self.event_gate("battery"):
                 return
             with state.car.lock:
-                state.car.tick()
-                soc = state.car.soc
-            log(f"GET battery: {soc / 10:.1f}%")
-            self.ok({"chrgMgmtData": {"bmsPackSOCDsp": soc, "bmsChrgSts": 0}})
+                c = state.car
+                c.tick()
+                soc, charging, plugged, target = c.soc, c.charging, c.plugged, c.target_code
+            log(f"GET battery: {soc / 10:.1f}%, plugged={plugged} charging={charging} limit={30 + target * 10}%")
+            self.ok({
+                "chrgMgmtData": {"bmsPackSOCDsp": soc, "bmsChrgSts": 1 if charging else 0,
+                                 "bmsOnBdChrgTrgtSOCDspCmd": target},
+                "rvsChargeStatus": {"chargingGunState": 1 if plugged else 0},
+            })
+
+        def charging_control(self, q, body: str):
+            if not self.event_gate("charging control"):
+                return
+            try:
+                req = json.loads(body)
+            except Exception:
+                req = {}
+            start = req.get("chrgCtrlReq") == 1
+            with state.car.lock:
+                c = state.car
+                c.tick()
+                if start and c.plugged and c.soc < c.target_pct * 10:
+                    c.charging = True
+                elif not start:
+                    c.charging = False
+                log(f"POST charging {'start' if start else 'stop'} -> charging={c.charging}")
+            self.ok({"bmsChrgSts": 1 if state.car.charging else 0})
+
+        def charging_setting(self, q, body: str):
+            if not self.event_gate("charging setting"):
+                return
+            try:
+                req = json.loads(body)
+            except Exception:
+                req = {}
+            code = req.get("onBdChrgTrgtSOCReq", 0)
+            with state.car.lock:
+                if 1 <= code <= 7:
+                    state.car.target_code = code
+                log(f"POST charging setting -> limit {state.car.target_pct}%")
+            self.ok({"bmsOnBdChrgTrgtSOCDspCmd": state.car.target_code})
 
         def control(self, q, body: str):
             if not self.event_gate("control"):
@@ -359,6 +432,10 @@ def make_handler(state: State):
             for p in req.get("rvcParams") or []:
                 v = base64.b64decode(p.get("paramValue", ""))
                 params[int(p["paramId"])] = v[0] if v else 0
+            c = state.car
+            if rtype == "6" and params.get(19, 0) > 0 and c.old_software and c.plugged and not c.charging:
+                log("POST control: climate -> refused, plugged in but not charging (old software)")
+                return self.send_json(200, {"code": 5, "message": "Remote control failed.(40)"})
             with state.car.lock:
                 state.car.apply(rtype, params)
                 s = state.car.basic_status()

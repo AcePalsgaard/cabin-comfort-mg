@@ -101,6 +101,22 @@ data class VehicleStatus(
     val remoteClimateStatus: Int?,
 )
 
+/** From vehicle/charging/mgmtData. [targetCode] is the car's charge-limit code (see [TargetSoc]). */
+data class ChargeState(
+    val plugged: Boolean,
+    val charging: Boolean,
+    val soc: Double?,
+    val targetCode: Int?,
+) {
+    val targetPercent: Int? get() = targetCode?.let { TargetSoc.percent(it) }
+}
+
+/** Charge-limit codes (TargetBatteryCode in saic-python-client-ng): 1 = 40 % … 7 = 100 %. */
+object TargetSoc {
+    fun percent(code: Int): Int? = if (code in 1..7) 30 + code * 10 else null
+    fun codeFor(percent: Int): Int = ((percent.coerceIn(40, 100) - 30) / 10)
+}
+
 class RvcParam(val id: Int, val value: ByteArray)
 
 data class ControlCommand(val reqType: String, val params: List<RvcParam>)

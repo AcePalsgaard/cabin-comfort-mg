@@ -13,6 +13,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.stateDescription
@@ -204,6 +205,19 @@ class HomeViewModel(private val c: AppContainer) : ViewModel() {
     val server: StateFlow<ServerSnapshot?> = combine(ServerStatus.state, c.auth.state) { s, a ->
         if (a.isDemo) null else s
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** "Next start in 1 day 4 hours · Auto", or null when no schedule is on. Ticks every minute. */
+    val nextStart: StateFlow<String?> = combine(
+        c.scheduler.schedule,
+        c.profiles.profiles,
+        kotlinx.coroutines.flow.flow { while (true) { emit(Unit); delay(60_000) } },
+    ) { s, profiles, _ ->
+        val now = java.time.ZonedDateTime.now()
+        s.nextStart(now)?.let { at ->
+            val name = s.profileId?.let { id -> profiles.firstOrNull { it.id == id }?.name } ?: "Auto"
+            "Next start in ${dk.Android.Cpmonster.mgmanager.schedule.timeUntil(now, at)} · $name"
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 }
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
@@ -214,8 +228,10 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     isDemo: Boolean = false,
     onExitDemo: () -> Unit = {},
+    onOpenSchedule: () -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val nextStart by viewModel.nextStart.collectAsStateWithLifecycle()
     val server by viewModel.server.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -274,6 +290,21 @@ fun HomeScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                nextStart?.let { text ->
+                    Row(
+                        Modifier.padding(top = 4.dp).clickable(onClick = onOpenSchedule),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Rounded.Schedule,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
             }
 
             if (ui.profiles.isEmpty()) {

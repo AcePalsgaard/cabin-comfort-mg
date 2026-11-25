@@ -156,6 +156,7 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
         Screen.Login -> ""
         Screen.Settings -> "Settings"
         Screen.About -> "About"
+        Screen.Schedule -> "Schedule"
         // Say which profile is being edited, e.g. "Warm up".
         is Screen.ProfileEdit -> profiles.firstOrNull { it.id == currentScreen.id }?.name ?: "Edit profile"
     }
@@ -182,6 +183,8 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
                 onSettings = { navigateTo(Screen.Settings) },
                 showAboutItem = currentScreen != Screen.About,
                 onAbout = { navigateTo(Screen.About) },
+                showScheduleItem = isLoggedIn && currentScreen != Screen.Schedule,
+                onSchedule = { navigateTo(Screen.Schedule) },
                 isLoggedIn = isLoggedIn,
                 onLogout = onLogout,
                 logoutLabel = if (auth.isDemo) "Exit demo" else "Log out",
@@ -243,6 +246,15 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
 
                     Screen.About -> AboutScreen(appVersion = appVersion)
 
+                    Screen.Schedule -> dk.Android.Cpmonster.mgmanager.ui.schedule.ScheduleScreen(
+                        viewModel = viewModel(
+                            key = "schedule",
+                            factory = viewModelFactory {
+                                initializer { dk.Android.Cpmonster.mgmanager.ui.schedule.ScheduleViewModel(container) }
+                            },
+                        ),
+                    )
+
                     is Screen.ProfileEdit -> ProfileEditScreen(
                         viewModel = viewModel(
                             key = "profile-${key.id}",
@@ -266,6 +278,7 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
                         onEditProfile = { navigateTo(Screen.ProfileEdit(it)) },
                         isDemo = auth.isDemo,
                         onExitDemo = { scope.launch { container.logout() } },
+                        onOpenSchedule = { navigateTo(Screen.Schedule) },
                     )
                 }
             }
@@ -278,6 +291,8 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
                 onSettings = { navigateTo(Screen.Settings) },
                 onAboutScreen = currentScreen == Screen.About,
                 onAbout = { navigateTo(Screen.About) },
+                showScheduleItem = isLoggedIn && currentScreen != Screen.Schedule,
+                onSchedule = { navigateTo(Screen.Schedule) },
                 isLoggedIn = isLoggedIn,
                 onLogout = onLogout,
                 logoutLabel = if (auth.isDemo) "Exit demo" else "Log out",

@@ -1,6 +1,5 @@
-What's new in 1.4:
-• Commands reach the car more reliably, and the app no longer floods it with retries
-• If the car refuses remote commands, the app says why and what to do
-• Heating shows as running as soon as the car confirms it; seats and other extras follow in the background
-• Clearer message when MG doesn't accept your login
-• Fewer logins to MG in the background
+What's new in 1.5:
+• Schedule: start heating or cooling at set times – one time for weekdays and one for weekends, or a time for each day
+• The front page shows when the next scheduled start is
+• Works around MG4s that won't heat or cool while plugged in but not charging (can be turned off per profile)
+• No MG account yet? A link to the MG iSMART app, where you create one

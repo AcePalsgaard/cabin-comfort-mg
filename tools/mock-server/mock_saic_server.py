@@ -352,9 +352,7 @@ def make_handler(state: State):
                 "vin": VIN, "brandName": "MG", "modelName": "MG4 Electric", "modelYear": "2023",
                 "series": "EH32 S", "name": "MG4", "colorName": "Holborn Blue",
                 "isCurrentVehicle": True, "isActivate": True, "isSubaccount": False,
-                "subAccountList": [], "vehicleModelConfiguration": [
-                    {"itemCode": "HeatedSeat", "itemName": "Heated seat", "itemValue": "1"},
-                ],
+                "subAccountList": [], "vehicleModelConfiguration": model_configuration(),
             }]})
 
         def status_cache(self, q, body):
@@ -460,18 +458,44 @@ def log(msg: str) -> None:
     print(time.strftime("%H:%M:%S"), msg, flush=True)
 
 
+
+# vehicleModelConfiguration of a real MG4 EH32 S (saic-python-mqtt-gateway issue #343, no VIN).
+# MG4s send no SWH (heated steering wheel); --swh adds it, e.g. --swh 0 = "car has none".
+MG4_CONFIG = [
+    ("J17", "Tire", "1"), ("Q00", "Airbag", "1"), ("Q01", "FAirbag", "1"), ("Q09", "AirbagS", "1"),
+    ("S35", "Sunroof", "0"), ("S61", "Remote control", "1"), ("T11", "AC", "1"), ("EPS", "EPS", "1"),
+    ("BONNUT", "BONNUT", "1"), ("DOOR", "DOOR", "1111"), ("BOOT", "BOOT", "1"), ("ENGINE", "ENGINE", "1"),
+    ("EV", "EV", "0"), ("HeatedSeat", "HeatedSeat", "1"), ("KEYPOS", "KEYPOS", "0"), ("ENERGY", "ENERGY", "1"),
+    ("BATTERY", "BATTERY", "1"), ("INTEMP", "INTEMP", "1"), ("EXTEMP", "EXTEMP", "1"), ("WINDOW", "WINDOW", "0000"),
+    ("LRD", "LRD", "0"), ("BTKEY", "BTKEY", "1"), ("BType", "Battery", "1"), ("SBH", "SBH", "1"),
+    ("BHI", "BHI", "1"), ("ROV", "ROV", "25857"),
+]
+SWH = None
+
+
+def model_configuration():
+    items = [{"itemCode": c, "itemName": n, "itemValue": v} for c, n, v in MG4_CONFIG]
+    if SWH is not None:
+        items.append({"itemCode": "SWH", "itemName": "SWH", "itemValue": SWH})
+    return items
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Fake MG iSMART API server")
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--fail-rate", type=float, default=0.15, help="share of calls that fail on purpose (0-1)")
     ap.add_argument("--outside", type=int, default=4, help="outside temperature in °C")
+    ap.add_argument("--swh", default=None,
+                    help="report SWH (heated steering wheel) in the car config: 0 = none, 1 = fitted; default: not sent, like an MG4")
     ap.add_argument("--slow", type=float, default=0.5, help="extra delay per call in seconds")
     args = ap.parse_args()
 
+    global SWH
+    SWH = args.swh
     server = ThreadingHTTPServer(("0.0.0.0", args.port), make_handler(State(args)))
     print(f"Fake MG server on http://localhost:{args.port}{PREFIX}/")
     print(f"From the Android emulator: http://10.0.2.2:{args.port}  (region 'Test server')")
-    print(f"Password: '{PASSWORD}'   failure rate: {args.fail_rate:.0%}   outside: {args.outside}°")
+    print(f"Password: '{PASSWORD}'   failure rate: {args.fail_rate:.0%}   outside: {args.outside}°   SWH: {SWH or 'not sent'}")
     print("Encryption:", "on (pycryptodome found)" if HAVE_AES else "off - plain JSON (pip install pycryptodome for full realism)")
     print("Ctrl+C to stop.\n")
     try:

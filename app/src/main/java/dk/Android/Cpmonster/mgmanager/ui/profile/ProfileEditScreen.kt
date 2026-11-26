@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
@@ -47,6 +48,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import dk.Android.Cpmonster.mgmanager.saic.CarFeatures
 import dk.Android.Cpmonster.mgmanager.saic.SeatHeating
+import dk.Android.Cpmonster.mgmanager.saic.Support
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -136,9 +138,16 @@ fun ProfileEditScreen(viewModel: ProfileEditViewModel, onDone: () -> Unit, modif
                         HorizontalDivider()
                     }
                 }
-                SwitchRow("Steering wheel", "Turns off by itself after ~10 min", profile.steeringWheel) { on ->
-                    viewModel.edit { it.copy(steeringWheel = on) }
-                }
+                SwitchRow(
+                    "Steering wheel",
+                    when (car.steeringWheelHeat) {
+                        Support.NO -> "Your car reports it has no remote steering wheel heating"
+                        Support.NOT_REPORTED -> "Your car doesn't report this. On some MG4s it does nothing"
+                        else -> "Turns off by itself after ~10 min"
+                    },
+                    profile.steeringWheel && car.hasSteeringWheelHeat,
+                    enabled = car.hasSteeringWheelHeat,
+                ) { on -> viewModel.edit { it.copy(steeringWheel = on) } }
                 SwitchRow("Rear window", null, profile.rearWindow) { on ->
                     viewModel.edit { it.copy(rearWindow = on) }
                 }
@@ -198,13 +207,20 @@ private fun LabeledValue(label: String, value: String) {
 }
 
 @Composable
-private fun SwitchRow(label: String, hint: String?, checked: Boolean, onChange: (Boolean) -> Unit) {
+private fun SwitchRow(
+    label: String,
+    hint: String?,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onChange: (Boolean) -> Unit,
+) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
+            val labelColor = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            Text(label, style = MaterialTheme.typography.bodyLarge, color = labelColor)
             hint?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
-        Switch(checked = checked, onCheckedChange = onChange)
+        Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
     }
 }
 

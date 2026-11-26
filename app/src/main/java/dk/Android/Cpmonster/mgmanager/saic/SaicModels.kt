@@ -56,7 +56,65 @@ data class VehicleInfo(
     val isCurrent: Boolean,
     /** Raw `HeatedSeat` value from vehicleModelConfiguration, if the car reported one. */
     val heatedSeat: String? = null,
+    /** Every vehicleModelConfiguration item the car reported. */
+    val config: List<ConfigItem> = emptyList(),
 )
+
+/** One entry of vehicleModelConfiguration in the vehicle list. */
+data class ConfigItem(val code: String, val name: String?, val value: String?)
+
+/** Whether the car says it has a feature. Only [NO] removes an option. */
+enum class Support {
+    /** No configuration from the car yet. */
+    UNKNOWN,
+    /** The car sent its configuration but without this item (MG4s don't send SWH). */
+    NOT_REPORTED,
+    YES,
+    NO;
+
+    companion object {
+        fun from(name: String?) = entries.firstOrNull { it.name == name } ?: UNKNOWN
+    }
+}
+
+/**
+ * Reads features from vehicleModelConfiguration. Codes from saic-python-mqtt-gateway and
+ * saic-python-client-ng issue #35 (18 real car configs):
+ * S35 sunroof, HeatedSeat front seats, HEATEDSEAT2 rear seats, BType battery, SWH steering wheel heat.
+ * SWH: the official iOS app shows the control only for "1". MG4s (EH32) don't send SWH at all.
+ * RWH (rear window) is not used: real cars send odd values (e.g. 9) or nothing.
+ */
+object CarConfig {
+    const val STEERING_WHEEL = "SWH"
+
+    fun steeringWheelHeat(items: List<ConfigItem>): Support = when {
+        items.isEmpty() -> Support.UNKNOWN
+        else -> when (value(items, STEERING_WHEEL)?.trim()) {
+            null, "" -> Support.NOT_REPORTED
+            "0" -> Support.NO
+            else -> Support.YES
+        }
+    }
+
+    fun value(items: List<ConfigItem>, code: String): String? =
+        items.firstOrNull { it.code.trim().equals(code, ignoreCase = true) }?.value
+
+    /** Parses the vehicleModelConfiguration array; blank codes are skipped. */
+    fun parse(arr: org.json.JSONArray?): List<ConfigItem> {
+        if (arr == null) return emptyList()
+        return (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            val code = o.optString("itemCode").trim().ifBlank { return@mapNotNull null }
+            ConfigItem(code, o.text("itemName"), o.text("itemValue"))
+        }
+    }
+
+    /** One line per item, for the log. */
+    fun describe(items: List<ConfigItem>): String =
+        if (items.isEmpty()) "(none)" else items.joinToString("; ") { "${it.code}=${it.value} (${it.name})" }
+
+    private fun org.json.JSONObject.text(key: String): String? = if (isNull(key)) null else optString(key).trim()
+}
 
 enum class SeatHeating {
     /** Car didn't say – send levels as-is. */
@@ -76,13 +134,18 @@ enum class SeatHeating {
 }
 
 /** What the car supports, detected from series + model configuration (rules from saic-python-mqtt-gateway). */
-data class CarFeatures(val series: String?, val seatHeating: SeatHeating = SeatHeating.UNKNOWN) {
+data class CarFeatures(
+    val series: String?,
+    val seatHeating: SeatHeating = SeatHeating.UNKNOWN,
+    val steeringWheelHeat: Support = Support.UNKNOWN,
+) {
     private val s = series?.trim()?.uppercase().orEmpty()
     private val isMg4 = s.startsWith("EH32")
 
     val minTemp: Int get() = if (isMg4) 17 else 16
     val maxTemp: Int get() = if (isMg4 || s.startsWith("MZS3E")) 31 else 28
     val hasSeatHeating: Boolean get() = seatHeating != SeatHeating.NONE
+    val hasSteeringWheelHeat: Boolean get() = steeringWheelHeat != Support.NO
 
     /** Celsius -> index the car expects. */
     fun temperatureIdx(celsius: Int): Int = (if (isMg4) 3 else 2) + celsius.coerceIn(minTemp, maxTemp) - minTemp

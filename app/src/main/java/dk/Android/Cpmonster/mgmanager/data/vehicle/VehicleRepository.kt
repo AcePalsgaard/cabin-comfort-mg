@@ -2,6 +2,7 @@ package dk.Android.Cpmonster.mgmanager.data.vehicle
 
 import dk.Android.Cpmonster.mgmanager.data.db.VehicleDao
 import dk.Android.Cpmonster.mgmanager.data.db.VehicleState
+import dk.Android.Cpmonster.mgmanager.saic.CarConfig
 import dk.Android.Cpmonster.mgmanager.saic.SaicApi
 import dk.Android.Cpmonster.mgmanager.saic.SaicApiException
 import dk.Android.Cpmonster.mgmanager.saic.SaicAuthException
@@ -28,7 +29,8 @@ class VehicleRepository(private val dao: VehicleDao) {
 
     suspend fun refresh(api: SaicApi): VehicleState {
         var st = dao.get() ?: VehicleState()
-        if (st.vin == null || st.model == null || st.seatHeating == null || st.colorName == null) {
+        if (st.vin == null || st.model == null || st.seatHeating == null || st.colorName == null ||
+            st.steeringWheelHeat == null) {
             st = loadVehicle(api, st)
             dao.upsert(st)
         }
@@ -82,6 +84,7 @@ class VehicleRepository(private val dao: VehicleDao) {
         return st.copy(
             vin = v.vin, model = v.modelName, modelYear = v.modelYear, series = v.series,
             seatHeating = SeatHeating.fromConfig(v.heatedSeat).name,
+            steeringWheelHeat = CarConfig.steeringWheelHeat(v.config).name,
             colorName = v.colorName ?: "",
         )
     }

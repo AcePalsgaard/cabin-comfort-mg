@@ -119,6 +119,10 @@ class ProfileController(
         profiles.clearActive()
         ClimateSession.cancelAlarms(context)
         if (p != null) ClimateSession.showFinished(context, p) else ClimateSession.clearAll(context)
+        // The car ends the A/C run by itself, but not seats or window heating (field test 26-11-2026:
+        // seats and both windows stayed on). Turn everything off, like Stop does.
+        queue.enqueue(JobType.CLIMATE, JSONObject().put("stop", true))
+        if (p != null) stopExtras(p, keep = null)
         queue.enqueueRestore()
         queue.enqueue(JobType.REFRESH_STATUS)
     }

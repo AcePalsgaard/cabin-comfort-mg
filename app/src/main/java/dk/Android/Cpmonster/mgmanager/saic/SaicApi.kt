@@ -174,7 +174,8 @@ class SaicApi(
         contentType: String? = null,
         // Same as saic-python-client-ng: a car that hasn't answered in 30 s rarely does.
         timeoutMs: Long = 30_000,
-        pollDelayMs: Long = 3_000,
+        // Reads: ask again soon, the official app feels quicker (each call itself takes a second or two).
+        pollDelayMs: Long = 1_000,
     ): JSONObject? {
         var eventId = "0"
         val deadline = System.currentTimeMillis() + timeoutMs

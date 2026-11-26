@@ -7,7 +7,9 @@ import dk.Android.Cpmonster.mgmanager.saic.SaicApiException
 import dk.Android.Cpmonster.mgmanager.saic.SaicAuthException
 import dk.Android.Cpmonster.mgmanager.saic.SaicIncompleteDataException
 import dk.Android.Cpmonster.mgmanager.saic.SeatHeating
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.supervisorScope
 
 /** Cached car type, temperatures and battery. Only ever updated from the background queue. */
 class VehicleRepository(private val dao: VehicleDao) {
@@ -33,7 +35,21 @@ class VehicleRepository(private val dao: VehicleDao) {
             dao.upsert(st)
         }
         val vin = st.vin!!
+        // Battery and status each wake the car and wait for it: ask both at once (was one after the
+        // other, ~15-25 s on a real MG4). supervisorScope: one failing doesn't cancel the other.
+        return supervisorScope {
+            val socCall = async { api.batterySoc(vin) }
+            try {
+                finishRefresh(api, vin, st) { socCall.await() }
+            } catch (e: Throwable) {
+                socCall.cancel()
+                throw e
+            }
+        }
+    }
 
+    private suspend fun finishRefresh(api: SaicApi, vin: String, start: VehicleState, soc: suspend () -> Double?): VehicleState {
+        var st = start
         // Cached status first – it doesn't wake the car.
         var status = try {
             api.vehicleStatusCached(vin)
@@ -62,7 +78,7 @@ class VehicleRepository(private val dao: VehicleDao) {
         )
         dao.upsert(st)
         // A failure here makes the queue retry the whole refresh, until we have a battery level.
-        val soc = api.batterySoc(vin)
+        val soc = soc()
         st = st.copy(batterySoc = soc ?: st.batterySoc)
         dao.upsert(st)
 

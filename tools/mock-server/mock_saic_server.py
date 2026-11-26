@@ -141,6 +141,7 @@ class State:
         self.reject_logins_until = 0.0
         self.http401_logins_until = 0.0
         self.block_car_until = 0.0
+        self.block_car_reason = 71
 
 
 def make_handler(state: State):
@@ -274,7 +275,7 @@ def make_handler(state: State):
             /mock/reject-logins?seconds=N  - every login says "wrong password" for N seconds
             /mock/expire-tokens           - forget all tokens so the app has to log in again
             /mock/http401-logins?seconds=N - every login gets HTTP 401 (like a blocked account) for N seconds
-            /mock/block-car?seconds=N      - commands get code 8 "Too frequent operations" for N seconds
+            /mock/block-car?seconds=N[&reason=253] - commands get code 8 "Too frequent operations (71)" (or reason 253) for N seconds
             /mock/plug?state=idle|charging|off[&soc=80][&target=80] - charging cable (idle = plugged, not charging)
             /mock/old-software?on=1|0      - 1: A/C refused while plugged in but not charging (default 1)
             /mock/fail-rate?rate=0.15      - share of calls that fail on purpose
@@ -292,7 +293,8 @@ def make_handler(state: State):
             elif url.path == "/mock/block-car":
                 secs = float(q.get("seconds", "600"))
                 state.block_car_until = time.time() + secs
-                log(f"MOCK: car blocks remote commands for {secs:.0f}s")
+                state.block_car_reason = int(q.get("reason", "71"))
+                log(f"MOCK: car blocks remote commands for {secs:.0f}s (reason {state.block_car_reason})")
             elif url.path == "/mock/plug":
                 st = q.get("state", "idle")
                 with state.car.lock:
@@ -419,7 +421,11 @@ def make_handler(state: State):
             if not self.event_gate("control"):
                 return
             if time.time() < state.block_car_until:
-                log("POST control -> code 8, car blocks remote commands (mock switch)")
+                log(f"POST control -> code 8 reason {state.block_car_reason} (mock switch)")
+                if state.block_car_reason == 253:
+                    # What a real MG4 answered right after being woken (field test 26-11-2026).
+                    return self.send_json(200, {"code": 8, "message": "Please confirm that the vehicle status or the overall "
+                                                "vehicle network status is normal.(253)"})
                 return self.send_json(200, {"code": 8, "message": "Too frequent operations. Please use the physical key "
                                             "to restart the vehicle, lock the car and turn off the engine, and then try again.(71)"})
             try:
@@ -434,8 +440,9 @@ def make_handler(state: State):
                 params[int(p["paramId"])] = v[0] if v else 0
             c = state.car
             if rtype == "6" and params.get(19, 0) > 0 and c.old_software and c.plugged and not c.charging:
+                # What a real MG4 answered (field test 26-11-2026): code 8 with reason 40.
                 log("POST control: climate -> refused, plugged in but not charging (old software)")
-                return self.send_json(200, {"code": 5, "message": "Remote control failed.(40)"})
+                return self.send_json(200, {"code": 8, "message": "Request timed out. Please try again later.(40)"})
             with state.car.lock:
                 state.car.apply(rtype, params)
                 s = state.car.basic_status()

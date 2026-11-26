@@ -1,6 +1,7 @@
 package dk.Android.Cpmonster.mgmanager.queue
 
 import android.content.Context
+import android.util.Log
 import dk.Android.Cpmonster.mgmanager.climate.ClimateSession
 import dk.Android.Cpmonster.mgmanager.data.db.Profile
 import dk.Android.Cpmonster.mgmanager.data.db.ProfileKind
@@ -21,7 +22,12 @@ class ProfileController(
 ) {
     private val lock = Mutex()
 
+    private companion object {
+        const val TAG = "ProfileController"
+    }
+
     suspend fun activate(profile: Profile) = lock.withLock {
+        Log.i(TAG, "Start ${profile.name}")
         val previous = profiles.activeNow()?.let { profiles.get(it.id) }
         profiles.setActive(profile.id, profile.runs)
         // Turn off extras the previous profile enabled but this one doesn't.
@@ -40,6 +46,7 @@ class ProfileController(
     }
 
     suspend fun deactivate() = lock.withLock {
+        Log.i(TAG, "Stop")
         val current = profiles.activeNow()?.let { profiles.get(it.id) }
         profiles.clearActive()
         ClimateSession.cancelAlarms(context)

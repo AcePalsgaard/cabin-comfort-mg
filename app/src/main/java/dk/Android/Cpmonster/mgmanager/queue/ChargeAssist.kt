@@ -41,8 +41,9 @@ class ChargeAssist(private val store: DataStore<Preferences>) {
         // No internet on the phone: nothing to learn. A flaky MG server is worth one look –
         // a refused command is retried until it times out, and a hiccup then looks like "server down".
         e is SaicNetworkException && e.phoneOffline -> false
-        // "Too frequent operations" or "Vehicle is powered on": more commands won't help.
-        e is SaicCarBlockedException -> false
+        // "Too frequent operations (71)" or "Vehicle is powered on": more commands won't help.
+        // But a real MG4, plugged in and not charging, answered code 8 "Request timed out.(40)" – worth a look.
+        e is SaicCarBlockedException && !mayBePluggedInRefusal(e) -> false
         System.currentTimeMillis() - lastCheckedAt < RECHECK_GAP_MS -> false
         else -> true
     }
@@ -112,5 +113,8 @@ class ChargeAssist(private val store: DataStore<Preferences>) {
         private const val FULL_SOC = 99.0
         private const val CHARGE_POLLS = 6
         private const val CHARGE_POLL_MS = 10_000L
+
+        /** Reason 40 is what the car gave when the A/C was refused while plugged in and not charging. */
+        fun mayBePluggedInRefusal(e: Exception): Boolean = SaicApi.reasonCode(e.message) == 40
     }
 }

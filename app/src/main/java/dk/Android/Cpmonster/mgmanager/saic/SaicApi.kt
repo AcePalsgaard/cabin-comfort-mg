@@ -196,7 +196,11 @@ class SaicApi(
         val msg = env.json.optString("message", "Unknown error")
         if (code == 401 || code == 403) throw SaicAuthException(msg)
         // Final answers: polling the same event again won't change them.
-        if (code == CODE_CAR_BLOCKED) throw SaicCarBlockedException(msg)
+        if (code == CODE_CAR_BLOCKED) {
+            // Code 8 covers several reasons. Some pass by themselves: retry those like any failure.
+            if (reasonCode(msg) in PASSING_CAR_REASONS) throw SaicApiException(msg, code)
+            throw SaicCarBlockedException(msg)
+        }
         if (code in FINAL_CODES) throw SaicApiException(msg, code)
         if (env.eventId != null && !env.json.has("data")) throw EventPending(env.eventId)
         if (code != 0) {
@@ -265,14 +269,13 @@ class SaicApi(
             throw e
         }
         ServerStatus.end(probe, ok = true)
-        if (dk.Android.Cpmonster.mgmanager.DevOnly.ENABLED) {
-            val j = envelope.json
-            android.util.Log.d(
-                "SaicApi",
-                "$method $path event-id=${headers["event-id"]} -> code=${j.opt("code")} " +
-                    "msg=${j.optString("message")} eventId=${envelope.eventId} data=${j.has("data")}",
-            )
-        }
+        // Every call and MG's answer (no data, no tokens): needed to read field tests in release builds.
+        val j = envelope.json
+        android.util.Log.i(
+            "SaicApi",
+            "$method $path event-id=${headers["event-id"]} -> code=${j.opt("code")} " +
+                "msg=${j.optString("message")} eventId=${envelope.eventId} data=${j.has("data")}",
+        )
         envelope
     }
 
@@ -337,6 +340,17 @@ class SaicApi(
         const val FORM = "application/x-www-form-urlencoded"
         /** "Too frequent operations. Please use the physical key to restart the vehicle…" */
         const val CODE_CAR_BLOCKED = 8
+        /**
+         * Code 8 reasons that pass by themselves, so they don't block the car. 253 "Please confirm that the
+         * vehicle status or the overall vehicle network status is normal": right after the car woke up;
+         * the same command a minute later worked (field test 26-11-2026).
+         */
+        val PASSING_CAR_REASONS = setOf(253)
+
+        /** MG's reason number at the end of a message, e.g. "Request timed out. Please try again later.(40)" -> 40. */
+        fun reasonCode(message: String?): Int? =
+            message?.let { Regex("""\((\d+)\)\s*$""").find(it)?.groupValues?.get(1)?.toIntOrNull() }
+
         /** Codes saic-python-client-ng never retries. */
         val FINAL_CODES = setOf(2, 3, 7)
         /** bmsChrgSts values that mean "charging". */

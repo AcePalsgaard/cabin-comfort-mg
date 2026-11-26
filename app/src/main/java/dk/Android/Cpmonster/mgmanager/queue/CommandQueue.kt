@@ -117,6 +117,7 @@ class CommandQueue(
                 }
                 try {
                     execute(type, JSONObject(job.payload))
+                    Log.i(TAG, "${job.type} done")
                     dao.delete(job.id)
                     if (type == JobType.CLIMATE) {
                         // Heating/A/C confirmed: fetch the car's status straight away, before the
@@ -151,7 +152,11 @@ class CommandQueue(
                         retryLater(job, type, e, immediate = false)
                     }
                 } catch (e: SaicNetworkException) {
-                    if (e.serverDown) serverDown(job, type, e) else retryLater(job, type, e, immediate = false)
+                    when {
+                        e.phoneOffline -> phoneOffline(job, e)
+                        e.serverDown -> serverDown(job, type, e)
+                        else -> retryLater(job, type, e, immediate = false)
+                    }
                 } catch (e: SaicApiException) {
                     if (type.isCommand && e.code in SaicApi.FINAL_CODES) {
                         // MG's final word, e.g. "Vehicle not locked. Please lock it and try again.(2)":
@@ -194,6 +199,18 @@ class CommandQueue(
         Log.w(TAG, "${job.type}: MG servers not responding (${e.message})")
         val backoff = min(5_000L shl min(job.attempts, 4), SERVER_DOWN_RETRY_MS)
         dao.reschedule(job.id, job.attempts + 1, System.currentTimeMillis() + backoff, e.message)
+    }
+
+    /**
+     * The phone has no internet, so nothing reached MG or the car: keep the job without using up an
+     * attempt (above all a "turn off" after Stop) and try again soon. Ends when the job gets too old.
+     * Wi-Fi without internet doesn't always tell Android when it's back, so don't rely on that alone.
+     */
+    private suspend fun phoneOffline(job: ApiJob, e: Exception) {
+        Log.w(TAG, "${job.type}: phone offline, waiting (${e.message})")
+        val waited = System.currentTimeMillis() - job.createdAt
+        val backoff = (waited / 4).coerceIn(5_000L, OFFLINE_RETRY_MS)
+        dao.reschedule(job.id, job.attempts, System.currentTimeMillis() + backoff, e.message)
     }
 
     /** The car refuses remote commands for now: drop every waiting command and tell the user what to do. */
@@ -323,5 +340,7 @@ class CommandQueue(
         private const val INCOMPLETE_MAX_ATTEMPTS = 8
         /** How often we knock on MG's door while their servers are down. */
         private const val SERVER_DOWN_RETRY_MS = 60_000L
+        /** Longest wait between tries while the phone has no internet. */
+        private const val OFFLINE_RETRY_MS = 30_000L
     }
 }

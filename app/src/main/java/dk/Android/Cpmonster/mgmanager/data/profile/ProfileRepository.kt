@@ -111,17 +111,15 @@ class ProfileRepository(context: Context, private val dao: ProfileDao) {
 
 /** Guesses a profile from the outside temperature. Never activates anything by itself. */
 object ProfileSuggester {
-    const val COLD_BELOW = 10
-    const val WARM_ABOVE = 20
+    /** At or below this: warm the car up. Above: chill it. Shared by the front-page card, the Auto widget and the schedule. */
+    const val SPLIT = 15
 
+    fun kindFor(outsideTemp: Int): ProfileKind = if (outsideTemp <= SPLIT) ProfileKind.COLD else ProfileKind.WARM
+
+    /** The front-page suggestion: shown whenever the temperature is known and nothing is running. */
     fun suggest(outsideTemp: Int?, profiles: List<Profile>, activeId: Long?): Profile? {
-        val kind = when {
-            outsideTemp == null -> return null
-            outsideTemp <= COLD_BELOW -> ProfileKind.COLD
-            outsideTemp >= WARM_ABOVE -> ProfileKind.WARM
-            else -> return null
-        }
-        val match = profiles.firstOrNull { it.kind == kind } ?: return null
-        return if (match.id == activeId) null else match
+        if (outsideTemp == null || activeId != null) return null
+        val kind = kindFor(outsideTemp)
+        return profiles.firstOrNull { it.kind == kind }
     }
 }

@@ -83,8 +83,7 @@ class Scheduler(
             val profile = s.profileId?.let { id -> all.firstOrNull { it.id == id } } ?: run {
                 // Auto: like the Auto widget. Unknown temperature -> warm up (the usual reason to pre-heat).
                 val t = vehicle.current()?.exteriorTemp
-                val mid = (ProfileSuggester.COLD_BELOW + ProfileSuggester.WARM_ABOVE) / 2
-                val kind = if (t == null || t <= mid) ProfileKind.COLD else ProfileKind.WARM
+                val kind = if (t == null) ProfileKind.COLD else ProfileSuggester.kindFor(t)
                 all.firstOrNull { it.kind == kind }
             } ?: return
             Log.i(TAG, "Scheduled start: ${profile.name}")

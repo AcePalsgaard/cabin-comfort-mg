@@ -1,5 +1,6 @@
 Nyt i 1.5:
 • Tidsplan: start varme eller køl på faste tidspunkter – ét tidspunkt for hverdage og ét for weekend, eller et for hver dag
 • Forsiden viser, hvornår næste planlagte start er
+• Forslaget om at varme eller køle bilen vises nu i alt vejr, også når det er mildt
 • Omgår MG4'ere, der ikke vil varme eller køle, når ladekablet sidder i, men bilen ikke lader (kan slås fra pr. profil)
 • Ingen MG-konto endnu? Link til MG iSMART-appen, hvor du opretter en

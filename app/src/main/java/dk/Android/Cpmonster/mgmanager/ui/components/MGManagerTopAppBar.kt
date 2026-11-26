@@ -7,7 +7,6 @@ import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PrivacyTip
-import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -41,6 +40,8 @@ fun MGManagerTopAppBar(
     onAbout: () -> Unit,
     showScheduleItem: Boolean,
     onSchedule: () -> Unit,
+    /** A schedule is switched on: the icon shows it. */
+    scheduleOn: Boolean = false,
     isLoggedIn: Boolean,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
@@ -84,20 +85,11 @@ fun MGManagerTopAppBar(
                     Icon(Icons.Rounded.CloudOff, contentDescription = "MG servers not responding", tint = MaterialTheme.colorScheme.error)
                 }
             }
+            if (showScheduleItem) ScheduleAction(scheduleOn, onSchedule)
             IconButton(onClick = { showMenu = true }) {
                 Icon(Icons.Rounded.MoreVert, contentDescription = "Menu")
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                if (showScheduleItem) {
-                    DropdownMenuItem(
-                        text = { Text("Schedule") },
-                        leadingIcon = { Icon(Icons.Rounded.Schedule, null) },
-                        onClick = {
-                            showMenu = false
-                            onSchedule()
-                        },
-                    )
-                }
                 if (showSettingsItem) {
                     DropdownMenuItem(
                         text = { Text("Settings") },

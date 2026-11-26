@@ -13,7 +13,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.AlarmOn
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.stateDescription
@@ -296,7 +296,7 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
-                            Icons.Rounded.Schedule,
+                            Icons.Rounded.AlarmOn,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(16.dp),

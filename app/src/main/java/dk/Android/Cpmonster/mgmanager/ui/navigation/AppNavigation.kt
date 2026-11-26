@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.flow.map
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -112,6 +113,8 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
     val vehicleState by container.vehicle.state.collectAsStateWithLifecycle(null)
     val carColorOverride by container.settings.carColor.collectAsStateWithLifecycle(null)
     val carPhoto by container.settings.carPhoto.collectAsStateWithLifecycle(null)
+    val scheduleOn by remember { container.scheduler.schedule.map { it.enabled } }
+        .collectAsStateWithLifecycle(false)
     val profiles by container.profiles.profiles.collectAsStateWithLifecycle(emptyList())
     val showTestServer = dk.Android.Cpmonster.mgmanager.DevOnly.ENABLED // DEV-ONLY
     val serverState by dk.Android.Cpmonster.mgmanager.saic.ServerStatus.state.collectAsStateWithLifecycle()
@@ -185,6 +188,7 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
                 onAbout = { navigateTo(Screen.About) },
                 showScheduleItem = isLoggedIn && currentScreen != Screen.Schedule,
                 onSchedule = { navigateTo(Screen.Schedule) },
+                scheduleOn = scheduleOn,
                 isLoggedIn = isLoggedIn,
                 onLogout = onLogout,
                 logoutLabel = if (auth.isDemo) "Exit demo" else "Log out",
@@ -293,6 +297,7 @@ private fun MainNav(viewModel: SettingsViewModel, auth: AuthState, modifier: Mod
                 onAbout = { navigateTo(Screen.About) },
                 showScheduleItem = isLoggedIn && currentScreen != Screen.Schedule,
                 onSchedule = { navigateTo(Screen.Schedule) },
+                scheduleOn = scheduleOn,
                 isLoggedIn = isLoggedIn,
                 onLogout = onLogout,
                 logoutLabel = if (auth.isDemo) "Exit demo" else "Log out",

@@ -1,5 +1,6 @@
 What's new in 1.5:
 • Schedule: start heating or cooling at set times – one time for weekdays and one for weekends, or a time for each day
 • The front page shows when the next scheduled start is
+• The suggestion to warm up or chill the car now shows in all weather, also when it's mild
 • Works around MG4s that won't heat or cool while plugged in but not charging (can be turned off per profile)
 • No MG account yet? A link to the MG iSMART app, where you create one

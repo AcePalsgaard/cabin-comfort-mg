@@ -48,11 +48,10 @@ object Widgets {
             Snapshot(auth.isLoggedIn, profiles, active?.id, v?.exteriorTemp)
         }.distinctUntilChanged()
 
-    /** Profile the Auto button starts: same thresholds as the suggestion, split at the midpoint in between. */
+    /** Profile the Auto button starts: same rule as the front-page suggestion. */
     fun autoPick(s: Snapshot): Profile? {
         val t = s.outsideTemp ?: return null
-        val mid = (ProfileSuggester.COLD_BELOW + ProfileSuggester.WARM_ABOVE) / 2
-        return if (t <= mid) s.cold else s.warm
+        return if (ProfileSuggester.kindFor(t) == ProfileKind.COLD) s.cold else s.warm
     }
 
     suspend fun handle(c: AppContainer, intent: Intent) {

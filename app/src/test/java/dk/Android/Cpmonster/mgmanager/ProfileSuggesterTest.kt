@@ -14,7 +14,13 @@ class ProfileSuggesterTest {
 
     @Test fun coldWeatherSuggestsCold() = assertEquals(cold, ProfileSuggester.suggest(3, all, null))
     @Test fun warmWeatherSuggestsWarm() = assertEquals(warm, ProfileSuggester.suggest(26, all, null))
-    @Test fun mildWeatherSuggestsNothing() = assertNull(ProfileSuggester.suggest(15, all, null))
+    @Test fun mildWeatherSplitsAt15() {
+        assertEquals(cold, ProfileSuggester.suggest(15, all, null))
+        assertEquals(warm, ProfileSuggester.suggest(16, all, null))
+    }
     @Test fun unknownTempSuggestsNothing() = assertNull(ProfileSuggester.suggest(null, all, null))
-    @Test fun alreadyActiveIsNotSuggested() = assertNull(ProfileSuggester.suggest(3, all, 1))
+    @Test fun nothingSuggestedWhileAProfileRuns() {
+        assertNull(ProfileSuggester.suggest(3, all, 1))
+        assertNull(ProfileSuggester.suggest(3, all, 2))
+    }
 }

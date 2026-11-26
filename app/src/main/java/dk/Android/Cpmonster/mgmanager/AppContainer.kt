@@ -35,7 +35,7 @@ class AppContainer(private val context: Context) {
 
     val settings = SettingsRepositoryImpl(context.dataStore)
     val auth = AuthRepository(context, http, settings)
-    val vehicle = VehicleRepository(db.vehicle())
+    val vehicle = VehicleRepository(db.vehicle(), dk.Android.Cpmonster.mgmanager.data.vehicle.CarMemory(context.dataStore))
     val profiles = ProfileRepository(context, db.profiles())
     private val demoCar = dk.Android.Cpmonster.mgmanager.demo.DemoCar(vehicle)
     val chargeAssist = dk.Android.Cpmonster.mgmanager.queue.ChargeAssist(context.dataStore)

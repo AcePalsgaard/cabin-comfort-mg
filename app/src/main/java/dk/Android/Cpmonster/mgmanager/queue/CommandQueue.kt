@@ -12,6 +12,7 @@ import dk.Android.Cpmonster.mgmanager.data.db.ApiJob
 import dk.Android.Cpmonster.mgmanager.data.db.JobDao
 import dk.Android.Cpmonster.mgmanager.data.db.VehicleState
 import dk.Android.Cpmonster.mgmanager.data.vehicle.VehicleRepository
+import dk.Android.Cpmonster.mgmanager.saic.CarFeatures
 import dk.Android.Cpmonster.mgmanager.saic.LoginThrottledException
 import dk.Android.Cpmonster.mgmanager.saic.NeedsLoginException
 import dk.Android.Cpmonster.mgmanager.saic.SaicApi
@@ -157,6 +158,7 @@ class CommandQueue(
                     }
                 } catch (e: SaicNetworkException) {
                     when {
+                        steeringWheelUnanswered(type, e, vehicle.features()) -> forgetSteeringWheel(job)
                         e.phoneOffline -> phoneOffline(job, e)
                         e.serverDown -> serverDown(job, type, e)
                         else -> retryLater(job, type, e, immediate = false)
@@ -215,6 +217,17 @@ class CommandQueue(
         val waited = System.currentTimeMillis() - job.createdAt
         val backoff = (waited / 4).coerceIn(5_000L, OFFLINE_RETRY_MS)
         dao.reschedule(job.id, job.attempts, System.currentTimeMillis() + backoff, e.message)
+    }
+
+    /**
+     * Many MG4s never confirm steering wheel heating (MG answers code 4 until we give up).
+     * Retrying only wastes minutes, so remember it for this car and drop all steering wheel jobs.
+     */
+    private suspend fun forgetSteeringWheel(job: ApiJob) {
+        Log.w(TAG, "Car didn't confirm the steering wheel: not sending it any more")
+        vehicle.current()?.vin?.let { vehicle.memory.setSteeringWheelUnconfirmed(it, true) }
+        dao.delete(job.id)
+        dao.deleteByKey(JobType.STEERING_WHEEL.name)
     }
 
     /** The car refuses remote commands for now: drop every waiting command and tell the user what to do. */
@@ -331,6 +344,11 @@ class CommandQueue(
 
     companion object {
         private const val TAG = "CommandQueue"
+
+        /** A steering wheel command the car never confirmed, on a car that doesn't report SWH=1. */
+        fun steeringWheelUnanswered(type: JobType, e: SaicNetworkException, car: CarFeatures): Boolean =
+            type == JobType.STEERING_WHEEL && e.carNoAnswer && !e.phoneOffline &&
+                car.steeringWheelHeat != dk.Android.Cpmonster.mgmanager.saic.Support.YES
         const val CAR_BLOCKED_NOTICE =
             "The car is refusing remote commands (too many in a short time). " +
                 "Start it with the key, lock it and turn it off, then try again."

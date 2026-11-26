@@ -3,6 +3,7 @@ package dk.Android.Cpmonster.mgmanager.data.db
 import androidx.room.ColumnInfo
 import dk.Android.Cpmonster.mgmanager.saic.CarFeatures
 import dk.Android.Cpmonster.mgmanager.saic.SeatHeating
+import dk.Android.Cpmonster.mgmanager.saic.Support
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -56,11 +57,15 @@ data class VehicleState(
     val colorName: String? = null,
     /** SeatHeating name; null = not detected yet. */
     val seatHeating: String? = null,
+    /** Support name from vehicleModelConfiguration (SWH); null = not read yet. */
+    val steeringWheelHeat: String? = null,
     val exteriorTemp: Int? = null,
     val interiorTemp: Int? = null,
     val batterySoc: Double? = null,
     val remoteClimateStatus: Int? = null,
     val updatedAt: Long? = null,
 ) {
-    val features get() = CarFeatures(series, SeatHeating.from(seatHeating))
+    val features get() = CarFeatures(
+        series, SeatHeating.from(seatHeating), Support.from(steeringWheelHeat),
+    )
 }

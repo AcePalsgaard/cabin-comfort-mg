@@ -135,7 +135,7 @@ class ProfileController(
     }
 
     private suspend fun apply(profile: Profile) {
-        val car = vehicle.current()?.features ?: CarFeatures(null)
+        val car = vehicle.features()
         val climate = JSONObject()
             .put("tempIdx", car.temperatureIdx(profile.targetTemp))
             .put("chargeAssist", profile.chargeAssist)
@@ -150,7 +150,8 @@ class ProfileController(
         if (left > 0 || right > 0) {
             queue.enqueue(JobType.SEATS, JSONObject().put("left", left).put("right", right))
         }
-        if (profile.steeringWheel) queue.enqueue(JobType.STEERING_WHEEL, JSONObject().put("on", true))
+        // Not sent when the car says it doesn't have it.
+        if (profile.steeringWheel && car.hasSteeringWheelHeat) queue.enqueue(JobType.STEERING_WHEEL, JSONObject().put("on", true))
         if (profile.rearWindow) queue.enqueue(JobType.REAR_WINDOW, JSONObject().put("on", true))
         queue.enqueue(JobType.REFRESH_STATUS)
     }
@@ -160,7 +161,8 @@ class ProfileController(
         if (hasSeats && (old.seatLeft > 0 || old.seatRight > 0) && (keep == null || (keep.seatLeft == 0 && keep.seatRight == 0))) {
             queue.enqueue(JobType.SEATS, JSONObject().put("left", 0).put("right", 0))
         }
-        if (old.steeringWheel && keep?.steeringWheel != true) {
+        val car = vehicle.features()
+        if (old.steeringWheel && keep?.steeringWheel != true && car.hasSteeringWheelHeat) {
             queue.enqueue(JobType.STEERING_WHEEL, JSONObject().put("on", false))
         }
         if (old.rearWindow && keep?.rearWindow != true) {

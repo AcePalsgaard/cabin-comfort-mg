@@ -78,6 +78,18 @@ class SaicApi(
         return (0 until arr.length()).mapNotNull { i ->
             val o = arr.optJSONObject(i) ?: return@mapNotNull null
             val vin = o.optString("vin").ifBlank { return@mapNotNull null }
+            val config = CarConfig.parse(o.optJSONArray("vehicleModelConfiguration"))
+            if (!configLogged) {
+                configLogged = true
+                // No VIN in the log. Read with: adb logcat -s SaicApi
+                runCatching {
+                    android.util.Log.i(
+                        "SaicApi",
+                        "Vehicle config for ${o.str("modelName")} ${o.str("modelYear")} series ${o.str("series")}: " +
+                            CarConfig.describe(config),
+                    )
+                }
+            }
             VehicleInfo(
                 vin = vin,
                 modelName = o.str("modelName") ?: o.str("name"),
@@ -85,7 +97,8 @@ class SaicApi(
                 series = o.str("series"),
                 colorName = o.str("colorName"),
                 isCurrent = o.optBoolean("isCurrentVehicle", false),
-                heatedSeat = o.configValue("HeatedSeat"),
+                heatedSeat = CarConfig.value(config, "HeatedSeat"),
+                config = config,
             )
         }
     }
@@ -185,7 +198,7 @@ class SaicApi(
                 return unwrap(env, eventId)
             } catch (p: EventPending) {
                 eventId = p.eventId
-                if (System.currentTimeMillis() > deadline) throw SaicNetworkException("The car did not answer in time", serverDown = false)
+                if (System.currentTimeMillis() > deadline) throw SaicNetworkException("The car did not answer in time", serverDown = false, carNoAnswer = true)
                 delay(pollDelayMs)
             }
         }
@@ -323,20 +336,14 @@ class SaicApi(
         }
     }
 
-    private fun JSONObject.configValue(code: String): String? {
-        val cfg = optJSONArray("vehicleModelConfiguration") ?: return null
-        for (i in 0 until cfg.length()) {
-            val item = cfg.optJSONObject(i) ?: continue
-            if (item.optString("itemCode").trim().equals(code, ignoreCase = true)) return item.str("itemValue")
-        }
-        return null
-    }
-
     private fun JSONObject.str(key: String): String? = if (isNull(key)) null else optString(key).ifBlank { null }
 
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
 
     companion object {
+        /** The vehicle config is logged once per app start. */
+        @Volatile private var configLogged = false
+
         const val JSON = "application/json"
         const val FORM = "application/x-www-form-urlencoded"
         /** "Too frequent operations. Please use the physical key to restart the vehicle…" */

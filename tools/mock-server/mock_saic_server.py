@@ -142,6 +142,8 @@ class State:
         self.http401_logins_until = 0.0
         self.block_car_until = 0.0
         self.block_car_reason = 71
+        # Like many real MG4s: steering wheel commands are never confirmed (code 4 on every poll).
+        self.silent_steering = bool(getattr(args, "silent_steering", False))
 
 
 def make_handler(state: State):
@@ -254,6 +256,13 @@ def make_handler(state: State):
             self.end_headers()
             self.wfile.write(data)
 
+        @staticmethod
+        def is_steering_wheel(body: str) -> bool:
+            try:
+                return str(json.loads(body).get("rvcReqType")) == "8"
+            except Exception:
+                return False
+
         def event_gate(self, name: str) -> bool:
             """Mimic the event-id dance: first call returns only an event-id, data comes later."""
             eid = self.headers.get("event-id", "0")
@@ -279,6 +288,7 @@ def make_handler(state: State):
             /mock/plug?state=idle|charging|off[&soc=80][&target=80] - charging cable (idle = plugged, not charging)
             /mock/old-software?on=1|0      - 1: A/C refused while plugged in but not charging (default 1)
             /mock/fail-rate?rate=0.15      - share of calls that fail on purpose
+            /mock/silent-steering?on=1|0   - 1: steering wheel commands never confirmed (code 4), like a real MG4
             """
             q = {k: v[0] for k, v in parse_qs(url.query).items()}
             if url.path == "/mock/reject-logins":
@@ -312,6 +322,9 @@ def make_handler(state: State):
             elif url.path == "/mock/old-software":
                 state.car.old_software = q.get("on", "1") == "1"
                 log(f"MOCK: old software (no A/C while plugged in, not charging): {state.car.old_software}")
+            elif url.path == "/mock/silent-steering":
+                state.silent_steering = q.get("on", "1") == "1"
+                log(f"MOCK: steering wheel never confirmed: {state.silent_steering}")
             elif url.path == "/mock/expire-tokens":
                 state.tokens.clear()
                 log("MOCK: all tokens expired")
@@ -352,9 +365,7 @@ def make_handler(state: State):
                 "vin": VIN, "brandName": "MG", "modelName": "MG4 Electric", "modelYear": "2023",
                 "series": "EH32 S", "name": "MG4", "colorName": "Holborn Blue",
                 "isCurrentVehicle": True, "isActivate": True, "isSubaccount": False,
-                "subAccountList": [], "vehicleModelConfiguration": [
-                    {"itemCode": "HeatedSeat", "itemName": "Heated seat", "itemValue": "1"},
-                ],
+                "subAccountList": [], "vehicleModelConfiguration": model_configuration(),
             }]})
 
         def status_cache(self, q, body):
@@ -418,6 +429,14 @@ def make_handler(state: State):
             self.ok({"bmsOnBdChrgTrgtSOCDspCmd": state.car.target_code})
 
         def control(self, q, body: str):
+            if state.silent_steering and self.is_steering_wheel(body):
+                # What a real MG4 answered on every poll (field test 26-11-2026).
+                eid = self.headers.get("event-id", "0")
+                if eid == "0":
+                    eid = uuid.uuid4().hex[:16]
+                log(f"POST control: steering wheel -> code 4, not confirmed (mock switch), event-id {eid}")
+                return self.send_json(200, {"code": 4, "message": "The remote control instruction failed, please try again later."},
+                                      extra_headers={"event-id": eid})
             if not self.event_gate("control"):
                 return
             if time.time() < state.block_car_until:
@@ -460,18 +479,46 @@ def log(msg: str) -> None:
     print(time.strftime("%H:%M:%S"), msg, flush=True)
 
 
+
+# vehicleModelConfiguration of a real MG4 EH32 S (saic-python-mqtt-gateway issue #343, no VIN).
+# MG4s send no SWH (heated steering wheel); --swh adds it, e.g. --swh 0 = "car has none".
+MG4_CONFIG = [
+    ("J17", "Tire", "1"), ("Q00", "Airbag", "1"), ("Q01", "FAirbag", "1"), ("Q09", "AirbagS", "1"),
+    ("S35", "Sunroof", "0"), ("S61", "Remote control", "1"), ("T11", "AC", "1"), ("EPS", "EPS", "1"),
+    ("BONNUT", "BONNUT", "1"), ("DOOR", "DOOR", "1111"), ("BOOT", "BOOT", "1"), ("ENGINE", "ENGINE", "1"),
+    ("EV", "EV", "0"), ("HeatedSeat", "HeatedSeat", "1"), ("KEYPOS", "KEYPOS", "0"), ("ENERGY", "ENERGY", "1"),
+    ("BATTERY", "BATTERY", "1"), ("INTEMP", "INTEMP", "1"), ("EXTEMP", "EXTEMP", "1"), ("WINDOW", "WINDOW", "0000"),
+    ("LRD", "LRD", "0"), ("BTKEY", "BTKEY", "1"), ("BType", "Battery", "1"), ("SBH", "SBH", "1"),
+    ("BHI", "BHI", "1"), ("ROV", "ROV", "25857"),
+]
+SWH = None
+
+
+def model_configuration():
+    items = [{"itemCode": c, "itemName": n, "itemValue": v} for c, n, v in MG4_CONFIG]
+    if SWH is not None:
+        items.append({"itemCode": "SWH", "itemName": "SWH", "itemValue": SWH})
+    return items
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Fake MG iSMART API server")
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--fail-rate", type=float, default=0.15, help="share of calls that fail on purpose (0-1)")
     ap.add_argument("--outside", type=int, default=4, help="outside temperature in °C")
+    ap.add_argument("--swh", default=None,
+                    help="report SWH (heated steering wheel) in the car config: 0 = none, 1 = fitted; default: not sent, like an MG4")
+    ap.add_argument("--silent-steering", action="store_true",
+                    help="never confirm steering wheel commands (code 4 on every poll), like many MG4s")
     ap.add_argument("--slow", type=float, default=0.5, help="extra delay per call in seconds")
     args = ap.parse_args()
 
+    global SWH
+    SWH = args.swh
     server = ThreadingHTTPServer(("0.0.0.0", args.port), make_handler(State(args)))
     print(f"Fake MG server on http://localhost:{args.port}{PREFIX}/")
     print(f"From the Android emulator: http://10.0.2.2:{args.port}  (region 'Test server')")
-    print(f"Password: '{PASSWORD}'   failure rate: {args.fail_rate:.0%}   outside: {args.outside}°")
+    print(f"Password: '{PASSWORD}'   failure rate: {args.fail_rate:.0%}   outside: {args.outside}°   SWH: {SWH or 'not sent'}")
     print("Encryption:", "on (pycryptodome found)" if HAVE_AES else "off - plain JSON (pip install pycryptodome for full realism)")
     print("Ctrl+C to stop.\n")
     try:

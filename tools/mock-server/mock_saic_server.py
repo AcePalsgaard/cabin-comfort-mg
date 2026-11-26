@@ -142,6 +142,8 @@ class State:
         self.http401_logins_until = 0.0
         self.block_car_until = 0.0
         self.block_car_reason = 71
+        # Like many real MG4s: steering wheel commands are never confirmed (code 4 on every poll).
+        self.silent_steering = bool(getattr(args, "silent_steering", False))
 
 
 def make_handler(state: State):
@@ -254,6 +256,13 @@ def make_handler(state: State):
             self.end_headers()
             self.wfile.write(data)
 
+        @staticmethod
+        def is_steering_wheel(body: str) -> bool:
+            try:
+                return str(json.loads(body).get("rvcReqType")) == "8"
+            except Exception:
+                return False
+
         def event_gate(self, name: str) -> bool:
             """Mimic the event-id dance: first call returns only an event-id, data comes later."""
             eid = self.headers.get("event-id", "0")
@@ -279,6 +288,7 @@ def make_handler(state: State):
             /mock/plug?state=idle|charging|off[&soc=80][&target=80] - charging cable (idle = plugged, not charging)
             /mock/old-software?on=1|0      - 1: A/C refused while plugged in but not charging (default 1)
             /mock/fail-rate?rate=0.15      - share of calls that fail on purpose
+            /mock/silent-steering?on=1|0   - 1: steering wheel commands never confirmed (code 4), like a real MG4
             """
             q = {k: v[0] for k, v in parse_qs(url.query).items()}
             if url.path == "/mock/reject-logins":
@@ -312,6 +322,9 @@ def make_handler(state: State):
             elif url.path == "/mock/old-software":
                 state.car.old_software = q.get("on", "1") == "1"
                 log(f"MOCK: old software (no A/C while plugged in, not charging): {state.car.old_software}")
+            elif url.path == "/mock/silent-steering":
+                state.silent_steering = q.get("on", "1") == "1"
+                log(f"MOCK: steering wheel never confirmed: {state.silent_steering}")
             elif url.path == "/mock/expire-tokens":
                 state.tokens.clear()
                 log("MOCK: all tokens expired")
@@ -416,6 +429,14 @@ def make_handler(state: State):
             self.ok({"bmsOnBdChrgTrgtSOCDspCmd": state.car.target_code})
 
         def control(self, q, body: str):
+            if state.silent_steering and self.is_steering_wheel(body):
+                # What a real MG4 answered on every poll (field test 26-11-2026).
+                eid = self.headers.get("event-id", "0")
+                if eid == "0":
+                    eid = uuid.uuid4().hex[:16]
+                log(f"POST control: steering wheel -> code 4, not confirmed (mock switch), event-id {eid}")
+                return self.send_json(200, {"code": 4, "message": "The remote control instruction failed, please try again later."},
+                                      extra_headers={"event-id": eid})
             if not self.event_gate("control"):
                 return
             if time.time() < state.block_car_until:
@@ -487,6 +508,8 @@ def main() -> None:
     ap.add_argument("--outside", type=int, default=4, help="outside temperature in °C")
     ap.add_argument("--swh", default=None,
                     help="report SWH (heated steering wheel) in the car config: 0 = none, 1 = fitted; default: not sent, like an MG4")
+    ap.add_argument("--silent-steering", action="store_true",
+                    help="never confirm steering wheel commands (code 4 on every poll), like many MG4s")
     ap.add_argument("--slow", type=float, default=0.5, help="extra delay per call in seconds")
     args = ap.parse_args()
 

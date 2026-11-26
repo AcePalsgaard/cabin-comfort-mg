@@ -197,7 +197,7 @@ class SaicApi(
                 return unwrap(env, eventId)
             } catch (p: EventPending) {
                 eventId = p.eventId
-                if (System.currentTimeMillis() > deadline) throw SaicNetworkException("The car did not answer in time", serverDown = false)
+                if (System.currentTimeMillis() > deadline) throw SaicNetworkException("The car did not answer in time", serverDown = false, carNoAnswer = true)
                 delay(pollDelayMs)
             }
         }

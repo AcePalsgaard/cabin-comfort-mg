@@ -1,5 +1,6 @@
 package dk.Android.Cpmonster.mgmanager.ui.profile
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,12 +58,16 @@ class ProfileEditViewModel(private val c: AppContainer, id: Long) : ViewModel() 
     val profile: StateFlow<Profile?> = _profile
 
     /** Detected car features – limits temperature range and seat controls. */
-    val car: StateFlow<CarFeatures> = c.vehicle.state
-        .map { it?.features ?: CarFeatures(null) }
+    val car: StateFlow<CarFeatures> = c.vehicle.features
         .stateIn(viewModelScope, SharingStarted.Eagerly, CarFeatures(null))
 
     init {
         viewModelScope.launch { _profile.value = c.profiles.get(id) }
+    }
+
+    /** The user wants to try the steering wheel again on this car. */
+    fun retrySteeringWheel() = viewModelScope.launch {
+        c.vehicle.current()?.vin?.let { c.vehicle.memory.setSteeringWheelUnconfirmed(it, false) }
     }
 
     fun edit(f: (Profile) -> Profile) = _profile.update { it?.let(f) }
@@ -140,13 +145,15 @@ fun ProfileEditScreen(viewModel: ProfileEditViewModel, onDone: () -> Unit, modif
                 }
                 SwitchRow(
                     "Steering wheel",
-                    when (car.steeringWheelHeat) {
-                        Support.NO -> "Your car reports it has no remote steering wheel heating"
-                        Support.NOT_REPORTED -> "Your car doesn't report this. On some MG4s it does nothing"
+                    when {
+                        car.steeringWheelSilenced -> "Your car doesn't answer this command. Tap here to try again"
+                        car.steeringWheelHeat == Support.NO -> "Your car reports it has no remote steering wheel heating"
+                        car.steeringWheelHeat == Support.NOT_REPORTED -> "Your car doesn't report this. On some MG4s it does nothing"
                         else -> "Turns off by itself after ~10 min"
                     },
                     profile.steeringWheel && car.hasSteeringWheelHeat,
                     enabled = car.hasSteeringWheelHeat,
+                    onHintClick = if (car.steeringWheelSilenced) ({ viewModel.retrySteeringWheel() }) else null,
                 ) { on -> viewModel.edit { it.copy(steeringWheel = on) } }
                 SwitchRow("Rear window", null, profile.rearWindow) { on ->
                     viewModel.edit { it.copy(rearWindow = on) }
@@ -212,13 +219,21 @@ private fun SwitchRow(
     hint: String?,
     checked: Boolean,
     enabled: Boolean = true,
+    onHintClick: (() -> Unit)? = null,
     onChange: (Boolean) -> Unit,
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             val labelColor = if (enabled) Color.Unspecified else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             Text(label, style = MaterialTheme.typography.bodyLarge, color = labelColor)
-            hint?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            hint?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (onHintClick != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = if (onHintClick != null) Modifier.clickable { onHintClick() } else Modifier,
+                )
+            }
         }
         Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
     }

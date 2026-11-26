@@ -8,14 +8,30 @@ import dk.Android.Cpmonster.mgmanager.saic.SaicApiException
 import dk.Android.Cpmonster.mgmanager.saic.SaicAuthException
 import dk.Android.Cpmonster.mgmanager.saic.SaicIncompleteDataException
 import dk.Android.Cpmonster.mgmanager.saic.SeatHeating
+import dk.Android.Cpmonster.mgmanager.saic.CarFeatures
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 
 /** Cached car type, temperatures and battery. Only ever updated from the background queue. */
-class VehicleRepository(private val dao: VehicleDao) {
+class VehicleRepository(private val dao: VehicleDao, val memory: CarMemory) {
 
     val state: Flow<VehicleState?> = dao.observe()
 
+    /** What the car can do: its configuration plus what we learned from its answers. */
+    val features: Flow<CarFeatures> = combine(state, memory.steeringWheelUnconfirmed) { st, silent ->
+        featuresOf(st, silent)
+    }
+
     suspend fun current(): VehicleState? = dao.get()
+
+    suspend fun features(): CarFeatures = featuresOf(dao.get(), memory.steeringWheelUnconfirmed.first())
+
+    private fun featuresOf(st: VehicleState?, silent: Set<String>): CarFeatures {
+        val f = st?.features ?: CarFeatures(null)
+        val vin = st?.vin ?: return f
+        return f.copy(steeringWheelUnconfirmed = CarMemory.vinKey(vin) in silent)
+    }
 
     suspend fun clear() = dao.clear()
 

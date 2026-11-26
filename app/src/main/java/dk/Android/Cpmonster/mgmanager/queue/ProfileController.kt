@@ -131,7 +131,7 @@ class ProfileController(
     }
 
     private suspend fun apply(profile: Profile) {
-        val car = vehicle.current()?.features ?: CarFeatures(null)
+        val car = vehicle.features()
         val climate = JSONObject()
             .put("tempIdx", car.temperatureIdx(profile.targetTemp))
             .put("chargeAssist", profile.chargeAssist)
@@ -157,7 +157,7 @@ class ProfileController(
         if (hasSeats && (old.seatLeft > 0 || old.seatRight > 0) && (keep == null || (keep.seatLeft == 0 && keep.seatRight == 0))) {
             queue.enqueue(JobType.SEATS, JSONObject().put("left", 0).put("right", 0))
         }
-        val car = vehicle.current()?.features ?: CarFeatures(null)
+        val car = vehicle.features()
         if (old.steeringWheel && keep?.steeringWheel != true && car.hasSteeringWheelHeat) {
             queue.enqueue(JobType.STEERING_WHEEL, JSONObject().put("on", false))
         }

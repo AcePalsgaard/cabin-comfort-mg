@@ -31,6 +31,8 @@ class SaicNetworkException(
     cause: Throwable? = null,
     val serverDown: Boolean = true,
     val phoneOffline: Boolean = false,
+    /** MG took the command but the car never confirmed it before our timeout. */
+    val carNoAnswer: Boolean = false,
 ) : SaicApiException(message, -1, cause)
 class SaicAuthException(message: String) : SaicApiException(message, 401)
 class SaicLoginRejectedException(message: String) : SaicApiException(message)
@@ -138,6 +140,8 @@ data class CarFeatures(
     val series: String?,
     val seatHeating: SeatHeating = SeatHeating.UNKNOWN,
     val steeringWheelHeat: Support = Support.UNKNOWN,
+    /** The car didn't confirm a steering wheel command earlier (see CarMemory). */
+    val steeringWheelUnconfirmed: Boolean = false,
 ) {
     private val s = series?.trim()?.uppercase().orEmpty()
     private val isMg4 = s.startsWith("EH32")
@@ -145,7 +149,14 @@ data class CarFeatures(
     val minTemp: Int get() = if (isMg4) 17 else 16
     val maxTemp: Int get() = if (isMg4 || s.startsWith("MZS3E")) 31 else 28
     val hasSeatHeating: Boolean get() = seatHeating != SeatHeating.NONE
-    val hasSteeringWheelHeat: Boolean get() = steeringWheelHeat != Support.NO
+    /** SWH from the car wins; without it, a car that never confirmed the command is left alone. */
+    val hasSteeringWheelHeat: Boolean get() = when (steeringWheelHeat) {
+        Support.NO -> false
+        Support.YES -> true
+        else -> !steeringWheelUnconfirmed
+    }
+    /** Off only because the car didn't answer: the user may try again. */
+    val steeringWheelSilenced: Boolean get() = !hasSteeringWheelHeat && steeringWheelHeat != Support.NO
 
     /** Celsius -> index the car expects. */
     fun temperatureIdx(celsius: Int): Int = (if (isMg4) 3 else 2) + celsius.coerceIn(minTemp, maxTemp) - minTemp

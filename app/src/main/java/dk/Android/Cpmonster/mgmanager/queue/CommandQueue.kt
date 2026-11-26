@@ -81,6 +81,10 @@ class CommandQueue(
     /** Seats, steering wheel, rear window still on their way – shown discreetly, the cabin is already heating. */
     val extrasWaiting: Flow<Set<JobType>> = waitingTypes.map { t -> t.filterTo(mutableSetOf()) { it.isCommand && it != JobType.CLIMATE } }
 
+    private val _climateStep = MutableStateFlow<String?>(null)
+    /** What starting the heating/A/C is doing right now, for the front page (it can take a minute or two). */
+    val climateStep: StateFlow<String?> = _climateStep
+
     private val _lastDropped = MutableStateFlow<String?>(null)
     /** Set when a command gave up – shown discreetly, never as a popup. */
     val lastDropped: StateFlow<String?> = _lastDropped
@@ -294,16 +298,20 @@ class CommandQueue(
         allowCharge: Boolean,
     ) {
         try {
+            _climateStep.value = "Waiting for the car to answer…"
             api.control(vin, command)
         } catch (e: SaicApiException) {
             if (!allowCharge || !chargeAssist.worthTrying(e)) throw e
-            if (!chargeAssist.prepare(api, vin)) {
+            if (!chargeAssist.prepare(api, vin) { _climateStep.value = it }) {
                 // Tried and it didn't work out: put back what we changed.
                 if (chargeAssist.hasChanges()) enqueueRestore()
                 throw e
             }
             Log.i(TAG, "Car is charging now, sending the A/C again")
+            _climateStep.value = "Car is charging – sending the heating again…"
             api.control(vin, command)
+        } finally {
+            _climateStep.value = null
         }
     }
 
@@ -334,6 +342,8 @@ class CommandQueue(
         fun carBlockedNotice(mgMessage: String?): String = when {
             mgMessage.isNullOrBlank() -> "The car is refusing remote commands right now."
             mgMessage.contains("frequent", ignoreCase = true) -> CAR_BLOCKED_NOTICE
+            SaicApi.reasonCode(mgMessage) == 40 ->
+                "The car didn't start the heating. If it's plugged in but not charging, start a charge and try again."
             else -> mgMessage
         }
         /** ~8 tries over roughly 10 minutes (5 s, 10 s, 20 s … backoff). */

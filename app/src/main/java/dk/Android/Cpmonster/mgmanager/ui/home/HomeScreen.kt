@@ -150,9 +150,13 @@ data class HomeUi(
     val sending: Boolean = false,
     /** e.g. "Seat heating and steering wheel on the way…", null when nothing extra is waiting. */
     val extras: String? = null,
+    /** What starting the heating is doing right now, e.g. "Car is plugged in – starting a charge…". */
+    val climateStep: String? = null,
 )
 
-private data class QueueView(val refreshing: Boolean, val sending: Boolean, val dropped: String?, val extras: Set<JobType>)
+private data class QueueView(
+    val refreshing: Boolean, val sending: Boolean, val dropped: String?, val extras: Set<JobType>, val step: String?,
+)
 
 /** Small line for extras still waiting for the car. */
 internal fun extrasText(waiting: Set<JobType>): String? {
@@ -173,12 +177,12 @@ class HomeViewModel(private val c: AppContainer) : ViewModel() {
         combine(c.vehicle.state, c.settings.carColor, c.settings.carPhoto) { v, o, p -> Triple(v, o, p) },
         c.profiles.profiles,
         c.profiles.active,
-        combine(c.queue.refreshing, c.queue.sending, c.queue.lastDropped, c.queue.extrasWaiting) { r, s, d, x -> QueueView(r, s, d, x) },
+        combine(c.queue.refreshing, c.queue.sending, c.queue.lastDropped, c.queue.extrasWaiting, c.queue.climateStep) { r, s, d, x, st -> QueueView(r, s, d, x, st) },
         dismissedFor,
     ) { (vehicle, colorOverride, photo), profiles, active, q, dismissed ->
         val suggestion = ProfileSuggester.suggest(vehicle?.exteriorTemp, profiles, active?.id)
             ?.takeIf { it.id != dismissed }
-        HomeUi(vehicle, profiles, active?.id, active, suggestion, q.refreshing, q.dropped, colorOverride, photo, q.sending, extrasText(q.extras))
+        HomeUi(vehicle, profiles, active?.id, active, suggestion, q.refreshing, q.dropped, colorOverride, photo, q.sending, extrasText(q.extras), q.step)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUi())
 
     init {
@@ -270,7 +274,7 @@ fun HomeScreen(
         val wide = dk.Android.Cpmonster.mgmanager.ui.components.isWideLayout()
         val carPart: @Composable ColumnScope.() -> Unit = {
             if (isDemo) DemoBanner(onExitDemo)
-            HeroCard(ui.vehicle, ui.syncing, ui.sending, ui.extras, ui.notice, activeProfile, accent, carColor(ui.carColorOverride, ui.vehicle), rememberCarPhoto(ui.carPhoto), server, onRefresh = { viewModel.refresh() })
+            HeroCard(ui.vehicle, ui.syncing, ui.sending, ui.climateStep, ui.extras, ui.notice, activeProfile, accent, carColor(ui.carColorOverride, ui.vehicle), rememberCarPhoto(ui.carPhoto), server, onRefresh = { viewModel.refresh() })
         }
         val profilesPart: @Composable ColumnScope.() -> Unit = {
             AnimatedVisibility(visible = ui.suggestion != null) {
@@ -393,6 +397,7 @@ private fun HeroCard(
     v: VehicleState?,
     syncing: Boolean,
     sending: Boolean,
+    step: String?,
     extras: String?,
     notice: String?,
     activeProfile: Profile?,
@@ -485,14 +490,23 @@ private fun HeroCard(
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.padding(bottom = 10.dp)) {
                     Text("outside", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        when {
-                            activeProfile != null -> if (activeProfile.kind == ProfileKind.COLD) "Warming up the cabin" else "Cooling down the cabin"
-                            else -> "A/C is off"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                    )
+                    if (step != null) {
+                        // Starting can take a minute or two (e.g. a charge first): say what's happening.
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp, color = accent)
+                            Spacer(Modifier.width(8.dp))
+                            Text(step, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                        }
+                    } else {
+                        Text(
+                            when {
+                                activeProfile != null -> if (activeProfile.kind == ProfileKind.COLD) "Warming up the cabin" else "Cooling down the cabin"
+                                else -> "A/C is off"
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
                 }
             }
 

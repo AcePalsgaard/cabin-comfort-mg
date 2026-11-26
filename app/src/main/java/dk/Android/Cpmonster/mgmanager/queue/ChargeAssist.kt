@@ -41,9 +41,11 @@ class ChargeAssist(private val store: DataStore<Preferences>) {
         // No internet on the phone: nothing to learn. A flaky MG server is worth one look –
         // a refused command is retried until it times out, and a hiccup then looks like "server down".
         e is SaicNetworkException && e.phoneOffline -> false
+        // A real MG4, plugged in and not charging, answered code 8 "Request timed out.(40)": always worth
+        // a look, also soon after the last one (the next run of a session, a second tap).
+        mayBePluggedInRefusal(e) -> true
         // "Too frequent operations (71)" or "Vehicle is powered on": more commands won't help.
-        // But a real MG4, plugged in and not charging, answered code 8 "Request timed out.(40)" – worth a look.
-        e is SaicCarBlockedException && !mayBePluggedInRefusal(e) -> false
+        e is SaicCarBlockedException -> false
         System.currentTimeMillis() - lastCheckedAt < RECHECK_GAP_MS -> false
         else -> true
     }
@@ -51,9 +53,10 @@ class ChargeAssist(private val store: DataStore<Preferences>) {
     /**
      * Start a charge if the car is plugged in but not charging. True when the car is charging
      * now, so the A/C is worth sending again. Never throws (except cancellation): on any problem
-     * the caller just carries on with the original error.
+     * the caller just carries on with the original error. [onStep] tells the user what's going on.
      */
-    suspend fun prepare(api: SaicApi, vin: String): Boolean = try {
+    suspend fun prepare(api: SaicApi, vin: String, onStep: (String) -> Unit = {}): Boolean = try {
+        onStep("The car refused – checking the charging cable…")
         val st = api.chargeState(vin)
         lastCheckedAt = System.currentTimeMillis()
         Log.i(TAG, "A/C failed – charge state: plugged=${st.plugged} charging=${st.charging} soc=${st.soc} target=${st.targetPercent}")
@@ -61,7 +64,7 @@ class ChargeAssist(private val store: DataStore<Preferences>) {
             !st.plugged || st.charging -> false
             // Full: the car won't start a charge, nothing we can do.
             (st.soc ?: 0.0) >= FULL_SOC -> false
-            else -> startCharge(api, vin, st.soc, st.targetPercent, st.targetCode)
+            else -> startCharge(api, vin, st.soc, st.targetPercent, st.targetCode, onStep)
         }
     } catch (e: CancellationException) {
         throw e
@@ -70,7 +73,10 @@ class ChargeAssist(private val store: DataStore<Preferences>) {
         false
     }
 
-    private suspend fun startCharge(api: SaicApi, vin: String, soc: Double?, target: Int?, targetCode: Int?): Boolean {
+    private suspend fun startCharge(
+        api: SaicApi, vin: String, soc: Double?, target: Int?, targetCode: Int?, onStep: (String) -> Unit,
+    ): Boolean {
+        onStep("Car is plugged in – starting a charge so it can heat…")
         if (soc != null && target != null && soc >= target - 1) {
             // At the limit: the car won't charge. One step above where the battery is now.
             val pct = (ceil((soc + 2) / 10) * 10).toInt().coerceIn(40, 100)
@@ -81,9 +87,13 @@ class ChargeAssist(private val store: DataStore<Preferences>) {
         store.edit { it[Keys.STARTED] = true }
         Log.i(TAG, "Starting a charge so the car powers the A/C")
         api.controlCharging(vin, start = true)
-        repeat(CHARGE_POLLS) {
-            delay(CHARGE_POLL_MS)
+        onStep("Waiting for the car to start charging…")
+        // Each look takes the car a few seconds to answer, so look again right away rather than
+        // sleeping first. Gives up after about a minute.
+        val until = System.currentTimeMillis() + CHARGE_WAIT_MS
+        while (System.currentTimeMillis() < until) {
             if (runCatching { api.chargeState(vin).charging }.getOrDefault(false)) return true
+            delay(CHARGE_POLL_MS)
         }
         Log.w(TAG, "Car didn't start charging (charger not supplying power?)")
         return false
@@ -111,8 +121,8 @@ class ChargeAssist(private val store: DataStore<Preferences>) {
         private const val TAG = "ChargeAssist"
         private const val RECHECK_GAP_MS = 20 * 60_000L
         private const val FULL_SOC = 99.0
-        private const val CHARGE_POLLS = 6
-        private const val CHARGE_POLL_MS = 10_000L
+        private const val CHARGE_WAIT_MS = 60_000L
+        private const val CHARGE_POLL_MS = 2_000L
 
         /** Reason 40 is what the car gave when the A/C was refused while plugged in and not charging. */
         fun mayBePluggedInRefusal(e: Exception): Boolean = SaicApi.reasonCode(e.message) == 40
